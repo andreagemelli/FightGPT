@@ -1,9 +1,9 @@
-# <p align=center>`Doc2Graph`</p> 
+# <p align=center>`FightGPT`</p> 
 This is an RPG game, 🧠 thought by me and ✍🏼 written by ChatGPT!
 
 Choose a class between Kinght 🗡️, Mage 🪄 and Archer 🏹 and defeat the final boss of the devil world you have been put in!
-
 Good luck!
+
 ---
 
 ## How to run it!
@@ -21,6 +21,7 @@ Finally, launch the game!
 ```
 ./main
 ```
+
 ---
 
 ## Next up!
