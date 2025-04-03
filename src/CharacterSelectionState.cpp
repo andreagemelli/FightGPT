@@ -4,16 +4,19 @@
 #include <sstream>
 
 CharacterSelectionState::CharacterSelectionState() : selectedOption(0) {
-    if (!font.loadFromFile("assets/fonts/Jacquard12-Regular.ttf")) {
+    if (!font.loadFromFile("assets/fonts/Jersey15-Regular.ttf")) {
         Logger::error("Failed to load font!");
         return;
     }
 
     // Set up title
     title.setFont(font);
-    title.setString("Select Your Character");
+    title.setString("FightGPT");
     title.setCharacterSize(32);
     title.setFillColor(sf::Color(255, 215, 0)); // Gold color
+    
+    // Load class icons
+    loadIcons();
     
     // Set up character options
     const std::string descriptions[3] = {
@@ -36,19 +39,42 @@ CharacterSelectionState::CharacterSelectionState() : selectedOption(0) {
     updatePositions();
 }
 
+void CharacterSelectionState::loadIcons() {
+    const std::string iconPaths[3] = {
+        "assets/icons/sword.png",    // Knight
+        "assets/icons/hat.png",      // Mage
+        "assets/icons/bow.png"       // Archer
+    };
+
+    for (int i = 0; i < 3; ++i) {
+        if (!classIcons[i].loadFromFile(iconPaths[i])) {
+            Logger::error("Failed to load icon: " + iconPaths[i]);
+            continue;
+        }
+        iconSprites[i].setTexture(classIcons[i]);
+        
+        // Scale icon to reasonable size (48x48 pixels)
+        float scale = 48.0f / std::max(classIcons[i].getSize().x, classIcons[i].getSize().y);
+        iconSprites[i].setScale(scale, scale);
+    }
+}
+
 void CharacterSelectionState::updatePositions() {
     // Center the title
     sf::FloatRect titleBounds = title.getLocalBounds();
     title.setPosition(400 - titleBounds.width/2, 50);
 
-    // Position the option boxes and text
+    // Position the option boxes, text and icons
     for (int i = 0; i < 3; ++i) {
         optionBoxes[i].setPosition(250, 150 + i * 140);
         
-        // Center the text within the box
+        // Position icon on the left side of the box
+        iconSprites[i].setPosition(260, 150 + i * 140 + 36); // Center vertically in box
+        
+        // Center the text within the box, but leave space for the icon
         sf::FloatRect textBounds = options[i].getLocalBounds();
         options[i].setPosition(
-            250 + (300 - textBounds.width) / 2,
+            320, // Start text after icon
             150 + i * 140 + (120 - textBounds.height) / 2
         );
     }
@@ -91,6 +117,7 @@ void CharacterSelectionState::draw(sf::RenderWindow& window) {
     
     for (int i = 0; i < 3; ++i) {
         window.draw(optionBoxes[i]);
+        window.draw(iconSprites[i]);
         window.draw(options[i]);
     }
 } 

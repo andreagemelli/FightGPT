@@ -28,6 +28,7 @@ private:
     void drawGrid(sf::RenderWindow& window);
     void handleCombat(Character* enemy);
     void addCombatLogMessage(const std::string& message);
+    void loadClassIcon(int selectedCharacter);
 
     std::unique_ptr<Character> player;
     std::unique_ptr<Map> gameMap;
@@ -39,6 +40,8 @@ private:
     sf::RectangleShape playerShape;
     sf::RectangleShape healthBar;
     sf::RectangleShape healthBarBackground;
+    sf::Texture classIcon;
+    sf::Sprite iconSprite;
     
     // Combat log elements
     sf::RectangleShape combatLogBackground;

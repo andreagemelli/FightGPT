@@ -28,24 +28,32 @@ GamePlayState::GamePlayState(int selectedCharacter)
     gameMap = std::make_unique<Map>(10, 10);
 
     // Initialize player shape
-    playerShape.setSize(sf::Vector2f(50, 50));
+    playerShape.setSize(sf::Vector2f(40, 40));
     playerShape.setFillColor(sf::Color::Blue);
     playerShape.setOutlineColor(sf::Color::White);
     playerShape.setOutlineThickness(2);
 
-    // Initialize health bar
-    healthBarBackground.setSize(sf::Vector2f(200, 20));
-    healthBarBackground.setFillColor(sf::Color(100, 100, 100));
-    healthBarBackground.setPosition(10, 10);
+    // Calculate layout dimensions
+    const float leftColumnWidth = 300.0f;
+    const float statsHeight = 200.0f;
+    const float padding = 10.0f;
 
-    healthBar.setSize(sf::Vector2f(200, 20));
+    // Load class icon
+    loadClassIcon(selectedCharacter);
+
+    // Initialize health bar (leaving space for icon)
+    healthBarBackground.setSize(sf::Vector2f(leftColumnWidth - 2 * padding - 48.0f, 20));
+    healthBarBackground.setFillColor(sf::Color(100, 100, 100));
+    healthBarBackground.setPosition(padding + 48.0f, padding); // Position after icon
+
+    healthBar.setSize(sf::Vector2f(leftColumnWidth - 2 * padding - 48.0f, 20));
     healthBar.setFillColor(sf::Color::Green);
-    healthBar.setPosition(10, 10);
+    healthBar.setPosition(padding + 48.0f, padding); // Position after icon
 
     // Initialize combat log
-    combatLogBackground.setSize(sf::Vector2f(300, 200));
+    combatLogBackground.setSize(sf::Vector2f(leftColumnWidth - 2 * padding, 600 - statsHeight - 3 * padding));
     combatLogBackground.setFillColor(sf::Color(0, 0, 0, 200));
-    combatLogBackground.setPosition(480, 10);
+    combatLogBackground.setPosition(padding, statsHeight + 2 * padding);
 
     // Set up the combat logger callback
     CombatLogger::setCallback([this](const std::string& message) {
@@ -56,31 +64,43 @@ GamePlayState::GamePlayState(int selectedCharacter)
     initializeStats();
 
     // Try to load font
-    if (!font.loadFromFile("assets/fonts/Jacquard12-Regular.ttf")) {
+    if (!font.loadFromFile("assets/fonts/Jersey15-Regular.ttf")) {
         Logger::error("Failed to load font!");
-        // Set up text elements with default font
-        statsText.setCharacterSize(16);
-        statsText.setFillColor(sf::Color::White);
-        statsText.setPosition(10, 40);
-
-        enemyText.setCharacterSize(14);
-        enemyText.setFillColor(sf::Color::White);
-        enemyText.setPosition(10, 120);
-    } else {
-        // Initialize text elements with loaded font
-        statsText.setFont(font);
-        statsText.setCharacterSize(16);
-        statsText.setFillColor(sf::Color::White);
-        statsText.setPosition(10, 40);
-
-        enemyText.setFont(font);
-        enemyText.setCharacterSize(14);
-        enemyText.setFillColor(sf::Color::White);
-        enemyText.setPosition(10, 120);
     }
+    
+    // Initialize text elements
+    statsText.setFont(font);
+    statsText.setCharacterSize(16);
+    statsText.setFillColor(sf::Color::White);
+    statsText.setPosition(padding, 40);
+
+    enemyText.setFont(font);
+    enemyText.setCharacterSize(14);
+    enemyText.setFillColor(sf::Color::White);
+    enemyText.setPosition(padding, 120);
 
     updateStatsText();
     updateEnemyDisplays();
+}
+
+void GamePlayState::loadClassIcon(int selectedCharacter) {
+    const std::string iconPath = selectedCharacter == 0 ? "assets/icons/sword.png" :
+                                selectedCharacter == 1 ? "assets/icons/hat.png" :
+                                                       "assets/icons/bow.png";
+    
+    if (!classIcon.loadFromFile(iconPath)) {
+        Logger::error("Failed to load icon: " + iconPath);
+        return;
+    }
+    
+    iconSprite.setTexture(classIcon);
+    
+    // Scale icon to 32x32 pixels for the health bar area
+    float scale = 32.0f / std::max(classIcon.getSize().x, classIcon.getSize().y);
+    iconSprite.setScale(scale, scale);
+    
+    // Position icon to the left of the health bar
+    iconSprite.setPosition(10, 4); // Align vertically with health bar
 }
 
 void GamePlayState::addCombatLogMessage(const std::string& message) {
@@ -91,9 +111,8 @@ void GamePlayState::addCombatLogMessage(const std::string& message) {
 
     // Update combat log texts
     combatLogTexts.clear();
-    float yPos = 20;
+    float yPos = 220; // Start below the stats section
     
-    // Only create text objects if font is loaded
     if (font.getInfo().family != "") {
         for (const auto& msg : combatLog) {
             sf::Text text;
@@ -101,7 +120,7 @@ void GamePlayState::addCombatLogMessage(const std::string& message) {
             text.setString(msg);
             text.setCharacterSize(12);
             text.setFillColor(sf::Color::White);
-            text.setPosition(490, yPos);
+            text.setPosition(20, yPos);
             combatLogTexts.push_back(text);
             yPos += 20;
         }
@@ -233,9 +252,10 @@ void GamePlayState::updateEnemyDisplays() {
 }
 
 void GamePlayState::drawGrid(sf::RenderWindow& window) {
-    const int cellSize = 50;
+    const int cellSize = 40;
     const int gridSize = 10;
-    const float offsetX = (window.getSize().x - gridSize * cellSize) / 2;
+    const float leftColumnWidth = 300.0f;
+    const float offsetX = leftColumnWidth + ((window.getSize().x - leftColumnWidth) - gridSize * cellSize) / 2;
     const float offsetY = (window.getSize().y - gridSize * cellSize) / 2;
 
     // Draw grid lines
@@ -259,19 +279,18 @@ void GamePlayState::drawGrid(sf::RenderWindow& window) {
 void GamePlayState::draw(sf::RenderWindow& window) {
     window.clear(sf::Color(40, 40, 40));
 
-    drawGrid(window);
+    // Draw left column elements
     window.draw(healthBarBackground);
     window.draw(healthBar);
+    window.draw(iconSprite);  // Draw the class icon
+    window.draw(statsText);
+    window.draw(enemyText);
+    window.draw(combatLogBackground);
     
-    // Only draw text if font is loaded
-    if (font.getInfo().family != "") {
-        window.draw(statsText);
-        window.draw(enemyText);
-        
-        // Draw combat log
-        window.draw(combatLogBackground);
-        for (const auto& text : combatLogTexts) {
-            window.draw(text);
-        }
+    for (const auto& text : combatLogTexts) {
+        window.draw(text);
     }
+
+    // Draw right column (game map)
+    drawGrid(window);
 } 

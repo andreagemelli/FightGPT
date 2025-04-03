@@ -15,11 +15,14 @@ public:
 
 private:
     void updatePositions();
+    void loadIcons();
 
     sf::Font font;
     sf::Text title;
     std::array<sf::Text, 3> options;
     std::array<sf::RectangleShape, 3> optionBoxes;
+    std::array<sf::Texture, 3> classIcons;
+    std::array<sf::Sprite, 3> iconSprites;
     sf::RectangleShape background;
     int selectedOption;
     
