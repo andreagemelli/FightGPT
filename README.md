@@ -7,27 +7,32 @@ Good luck!
 ---
 
 ## How to run it!
-This version has been tested with ```Apple clang version 14.0.0```.
+This version requires SFML 2.6.3.
+Tested on Mac Air M1 - macOS 15.3.2:
+```
+brew install sfml@2
+```
 
 Download the repo on your local machine:
 ```
 git clone https://github.com/andreagemelli/FightGPT.git
 ```
-Then compile ```main.cpp``` with your compiler, e.g.:
+Then build the project:
 ```
-clang++ main.cpp -o main
+mkdir build && cd build
+cmake .. && make
 ```
 Finally, launch the game!
 ```
-./main
+./FightGPT
 ```
 
 ---
 
 ## Next up!
 I would like to expand the game, and I am working on the following contents:
-- [ ] Make the game playable through a GUI
-- [ ] Adding Items and Inventory
-- [ ] Other stuff
+- [X] Make the game playable through a GUI
+- [ ] Adding Items and Inventory
+- [ ] Other stuff
 
 If you wanna join the project, just write me to my email -> gemelli.andrea@hotmail.com
