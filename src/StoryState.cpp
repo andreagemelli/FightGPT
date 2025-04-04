@@ -3,36 +3,64 @@
 #include "Logger.h"
 #include <sstream>
 
-StoryState::StoryState(int selectedCharacter, const std::string& playerName)
-    : playerName(playerName), selectedCharacter(selectedCharacter), textFadeIn(0.0f) {
+StoryState::StoryState(int selectedCharacter, const std::string& playerName, const std::string& bossName)
+    : selectedCharacter(selectedCharacter), 
+      playerName(playerName), 
+      bossName(bossName),
+      textFadeIn(0.0f),
+      pulseEffect(0.0f),
+      continueTextDelay(0.0f) {
     
     if (!font.loadFromFile("assets/fonts/Jersey15-Regular.ttf")) {
         Logger::error("Failed to load font!");
         return;
     }
 
-    // Set up background
-    background.setSize(sf::Vector2f(1200, 800));
-    background.setFillColor(sf::Color(0, 0, 0, 255));
+    // Create dark overlay background
+    background.setSize(sf::Vector2f(1200, 800));  // Window size
+    background.setFillColor(sf::Color(0, 0, 0, 255));  // Pure black
 
-    // Generate boss name
-    const std::string bossFirstNames[] = {"Shadowlord", "Dreadking", "Nightbringer", "Soulreaver", "Doomweaver"};
-    const std::string bossLastNames[] = {"Vex", "Morthul", "Grimm", "Darkfang", "Bloodthorn"};
-    bossName = bossFirstNames[rand() % 5] + " " + bossLastNames[rand() % 5];
-
-    // Set up story text
+    // Set up story text with padding
+    const float horizontalPadding = 40.0f;  // Reduced padding
+    const float verticalPadding = 40.0f;    // Reduced padding
     storyText.setFont(font);
-    storyText.setCharacterSize(24);
-    storyText.setFillColor(sf::Color(255, 255, 255, 0)); // Start fully transparent
+    storyText.setCharacterSize(18);         // Even smaller font size
+    storyText.setFillColor(sf::Color(255, 255, 255, 0));  // Start fully transparent
+    storyText.setLineSpacing(1.3f);  // Slightly reduced line spacing
 
-    // Set up continue text
-    continueText.setFont(font);
-    continueText.setString("Press ENTER to continue...");
-    continueText.setCharacterSize(20);
-    continueText.setFillColor(sf::Color(150, 150, 150, 0)); // Start fully transparent
-    
+    // Generate the story content
     generateStory();
+
+    // Format the text to fit within the screen
     formatText();
+
+    // Get the formatted text bounds
+    sf::FloatRect textBounds = storyText.getLocalBounds();
+
+    // Create a semi-transparent text background with padding
+    const float maxBackgroundWidth = 500.0f;  // Reduced maximum width
+    textBackground.setSize(sf::Vector2f(
+        std::min(maxBackgroundWidth, textBounds.width + (horizontalPadding * 2)),
+        textBounds.height + (verticalPadding * 2)
+    ));
+    textBackground.setFillColor(sf::Color(0, 0, 0, 200));
+    textBackground.setOrigin(textBackground.getSize().x / 2.0f, textBackground.getSize().y / 2.0f);
+    textBackground.setPosition(1200 / 2.0f, 800 / 2.0f);
+
+    // Center the text within the background
+    storyText.setOrigin(textBounds.width / 2.0f, textBounds.height / 2.0f);
+    storyText.setPosition(1200 / 2.0f, 800 / 2.0f);
+
+    // Set up the continue text
+    continueText.setFont(font);
+    continueText.setString("Press ENTER to begin your quest...");
+    continueText.setCharacterSize(20);  // Smaller continue text
+    continueText.setFillColor(sf::Color(255, 255, 255, 0));  // Start invisible
+    
+    // Center the continue text at the bottom of the text background
+    sf::FloatRect continueBounds = continueText.getLocalBounds();
+    continueText.setOrigin(continueBounds.width / 2.0f, continueBounds.height / 2.0f);
+    continueText.setPosition(1200 / 2.0f, textBackground.getPosition().y + (textBackground.getSize().y / 2.0f) + 25.0f);
 }
 
 void StoryState::generateStory() {
@@ -42,105 +70,131 @@ void StoryState::generateStory() {
     switch (selectedCharacter) {
         case 0: // Knight
             classType = "noble knight";
-            questDescription = "Your first task is to find a legendary weapon in the ancient armory, "
-                             "which lies in the eastern part of this cursed realm.";
+            questDescription = "Your martial prowess and unwavering courage may be the key to escaping this cursed realm.";
             break;
         case 1: // Mage
             classType = "skilled mage";
-            questDescription = "Your first task is to locate the arcane scrolls of power, "
-                             "hidden within the forgotten library to the east.";
+            questDescription = "Your mastery of the arcane arts could be the power needed to break free from this dark dimension.";
             break;
         case 2: // Archer
             classType = "swift archer";
-            questDescription = "Your first task is to retrieve the enchanted arrows "
-                             "from the sacred grove in the eastern forests.";
+            questDescription = "Your deadly precision and agility might be the perfect skills to survive and escape this nightmare.";
             break;
     }
 
     std::stringstream ss;
-    ss << "In a world where light once prevailed, darkness has taken hold...\n\n"
-       << playerName << ", a " << classType << " from the realm of peace, "
-       << "you have been pulled through a mysterious portal into this corrupted land.\n\n"
-       << "This cursed realm is ruled by " << bossName << ", "
-       << "a terrifying entity whose very presence drains the life from the land. "
-       << "Known for commanding legions of twisted creatures and wielding powers that defy reality itself, "
-       << "the tyrant has enslaved countless souls.\n\n"
-       << "To return home, you must defeat " << bossName << " and break their hold over this world. "
-       << "But first, you must grow stronger...\n\n"
-       << questDescription;
+    ss << "In the depths of an ancient dungeon, where reality bends and darkness reigns supreme...\n\n"
+       << "You, " << playerName << ", a " << classType << " from the realm of light, "
+       << "have been pulled through a malevolent portal while investigating strange occurrences in your homeland.\n\n"
+       << "This cursed place is known as the Shifting Dungeons, a prison dimension ruled by " << bossName 
+       << ", a being of pure malice who feeds on the essence of trapped warriors.\n\n"
+       << "For centuries, " << bossName << " has used these dungeons to lure mighty heroes, draining their power "
+       << "to maintain their immortality. The walls themselves pulse with the trapped souls of fallen champions.\n\n"
+       << questDescription << "\n\n"
+       << "To escape this nightmare and prevent " << bossName << " from threatening your world, "
+       << "you must grow stronger by defeating the dungeon's corrupted denizens, "
+       << "find powerful artifacts to aid your quest, and ultimately face the tyrant in combat.\n\n"
+       << "But beware - death here means your soul will join the countless others, forever powering the dungeon's dark magic...\n\n"
+       << "Press ENTER to begin your quest...";
 
     storyText.setString(ss.str());
 }
 
 void StoryState::formatText() {
-    // Add horizontal padding to story text
-    const float horizontalPadding = 200.0f; // 200 pixels on each side
+    // Set a fixed width for the text, accounting for padding
+    const float maxWidth = 420.0f;  // Further reduced width of the text block
     
-    // Center the story text with padding
-    sf::FloatRect textBounds = storyText.getLocalBounds();
-    storyText.setPosition(
-        horizontalPadding,
-        (800 - textBounds.height) / 2 - 50
-    );
-
-    // Adjust text width to account for padding
-    float maxWidth = 1200 - (horizontalPadding * 2);
-    std::string currentText = storyText.getString();
-    
-    // Word wrap the text to fit within the padding
-    std::string wrappedText;
-    std::istringstream words(currentText);
+    std::string originalText = storyText.getString();
+    std::string formattedText;
+    std::string currentLine;
+    std::istringstream words(originalText);
     std::string word;
-    float currentLineWidth = 0;
+    
+    float currentLineWidth = 0.0f;
+    
+    // Create a temporary text object for width measurements
+    sf::Text tempText;
+    tempText.setFont(font);
+    tempText.setCharacterSize(18);  // Match the story text size
+    
     while (std::getline(words, word, ' ')) {
-        sf::Text tempText;
-        tempText.setFont(font);
-        tempText.setCharacterSize(24);
+        // Handle newlines in the original text
+        size_t newlinePos = word.find("\\n");
+        if (newlinePos != std::string::npos) {
+            if (newlinePos == 0) {
+                formattedText += "\n";
+            } else {
+                formattedText += currentLine + word.substr(0, newlinePos) + "\n";
+                currentLine = "";
+            }
+            currentLineWidth = 0.0f;
+            continue;
+        }
+        
+        // Measure this word
         tempText.setString(word + " ");
         float wordWidth = tempText.getLocalBounds().width;
         
         if (currentLineWidth + wordWidth > maxWidth) {
-            wrappedText += "\n" + word + " ";
+            // Line would be too long, add a newline
+            formattedText += currentLine + "\n";
+            currentLine = word + " ";
             currentLineWidth = wordWidth;
         } else {
-            wrappedText += word + " ";
+            // Add to current line
+            currentLine += word + " ";
             currentLineWidth += wordWidth;
         }
     }
     
-    storyText.setString(wrappedText);
-
-    // Position continue text at the bottom
-    sf::FloatRect continueBounds = continueText.getLocalBounds();
-    continueText.setPosition(
-        (1200 - continueBounds.width) / 2,
-        700
-    );
+    // Add the last line
+    formattedText += currentLine;
+    
+    // Set the formatted text
+    storyText.setString(formattedText);
 }
 
 void StoryState::handleEvent(const sf::Event& event, sf::RenderWindow& /*window*/) {
     if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Return) {
-        // Only allow proceeding if text is fully visible
-        if (textFadeIn >= 1.0f) {
-            nextState = std::make_unique<GamePlayState>(selectedCharacter, playerName);
-        }
+        nextState = std::make_unique<GamePlayState>(selectedCharacter, playerName, bossName);
     }
 }
 
 void StoryState::update(float deltaTime) {
     // Fade in text gradually
     if (textFadeIn < 1.0f) {
-        textFadeIn += deltaTime * 0.5f; // Adjust speed by changing multiplier
+        textFadeIn += deltaTime * 2.0f; // Adjust speed by changing multiplier
         if (textFadeIn > 1.0f) textFadeIn = 1.0f;
 
-        int alpha = static_cast<int>(255 * textFadeIn);
-        storyText.setFillColor(sf::Color(255, 255, 255, alpha));
-        continueText.setFillColor(sf::Color(150, 150, 150, alpha));
+        // Update story text opacity
+        sf::Color storyColor = storyText.getFillColor();
+        storyColor.a = static_cast<sf::Uint8>(255 * textFadeIn);
+        storyText.setFillColor(storyColor);
+    }
+
+    // Handle continue text delay and effects
+    if (textFadeIn >= 1.0f) {  // Only start counting delay after main text is fully visible
+        continueTextDelay += deltaTime;
+        
+        if (continueTextDelay >= 5.0f) {  // After 5 seconds
+            // Start pulsing the continue text
+            pulseEffect += deltaTime * 3.0f;  // Control pulse speed
+            float alpha = (std::sin(pulseEffect) + 1.0f) / 2.0f;  // Oscillate between 0 and 1
+            
+            // Apply pulse effect to continue text
+            sf::Color textColor = continueText.getFillColor();
+            textColor.a = static_cast<sf::Uint8>(155 + 100 * alpha);  // Pulse between 155 and 255 alpha
+            continueText.setFillColor(textColor);
+        } else {
+            // Keep continue text invisible until delay is over
+            continueText.setFillColor(sf::Color(255, 255, 255, 0));
+        }
     }
 }
 
 void StoryState::draw(sf::RenderWindow& window) {
     window.draw(background);
+    window.draw(textBackground);
     window.draw(storyText);
     window.draw(continueText);
 } 

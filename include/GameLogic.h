@@ -60,6 +60,10 @@ protected:
     bool isRage;        // For Knight: when true, forces critical hit
     int markerCount;    // For Archer: counts remaining guaranteed hits
     bool burnActive;    // For Mage: tracks if enemy is burning
+    
+    // Buff properties
+    int strengthBuff;   // Tracks temporary strength bonus
+    float strengthBuffDuration;  // Duration of strength buff in seconds
 
 public:
     Character() {}
@@ -81,7 +85,9 @@ public:
           abilityUsed(false),
           isRage(false),
           markerCount(0),
-          burnActive(false) {}
+          burnActive(false),
+          strengthBuff(0),
+          strengthBuffDuration(0.0f) {}
 
     virtual ~Character() = default;
 
@@ -156,7 +162,7 @@ public:
     }
 
     int GetTotalAttack() const {
-        int total = attack;
+        int total = attack + strengthBuff;  // Add strength buff to base attack
         if (equipped_weapon) {
             total += equipped_weapon->GetEffectValue();
         }
@@ -205,6 +211,24 @@ public:
             health = std::max(1, health - 5); // 5 HP burn damage per turn
         }
     }
+
+    // Buff methods
+    void ApplyStrengthBuff(int bonus) {
+        strengthBuff = bonus;
+        strengthBuffDuration = 30.0f;  // Buff lasts for 30 seconds
+    }
+
+    void UpdateBuffs(float deltaTime) {
+        if (strengthBuffDuration > 0) {
+            strengthBuffDuration -= deltaTime;
+            if (strengthBuffDuration <= 0) {
+                strengthBuff = 0;  // Remove buff when duration expires
+            }
+        }
+    }
+
+    bool HasStrengthBuff() const { return strengthBuff > 0; }
+    float GetStrengthBuffDuration() const { return strengthBuffDuration; }
 };
 
 class Battle {

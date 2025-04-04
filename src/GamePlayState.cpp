@@ -24,13 +24,14 @@ private:
 
 std::function<void(const std::string&)> CombatLogger::callback;
 
-GamePlayState::GamePlayState(int selectedCharacter, const std::string& playerName)
+GamePlayState::GamePlayState(int selectedCharacter, const std::string& playerName, const std::string& bossName)
     : player(nullptr),
       gameMap(std::make_unique<Map>(15, 15)),
       currentEnemy(nullptr),
       combatState(CombatState::NOT_IN_COMBAT),
       selectedCharacter(selectedCharacter),
       playerName(playerName),
+      bossName(bossName),
       gameOver(false),
       currentDiceValue(1),
       diceAnimationTime(0),
@@ -519,6 +520,9 @@ void GamePlayState::update(float deltaTime) {
     float healthBarWidth = healthBarBackground.getSize().x;
     healthBar.setSize(sf::Vector2f(healthBarWidth * healthPercent, healthBar.getSize().y));
     
+    // Update buffs
+    player->UpdateBuffs(deltaTime);
+    
     // Update dice animation
     updateDiceRoll(deltaTime);
 
@@ -528,6 +532,7 @@ void GamePlayState::update(float deltaTime) {
     }
 
     updateInventoryDisplay();
+    updateStatsText();  // Update stats to reflect any buff changes
 }
 
 void GamePlayState::updateStatsText() {
@@ -548,7 +553,12 @@ void GamePlayState::updateStatsText() {
     
     // Show total attack if different from base
     if (player->GetTotalAttack() != player->GetAttack()) {
-        ss << " (Total: " << player->GetTotalAttack() << ")";
+        ss << " (Total: " << player->GetTotalAttack();
+        if (player->HasStrengthBuff()) {
+            ss << " [+" << player->GetTotalAttack() - player->GetAttack() << " for " 
+               << static_cast<int>(player->GetStrengthBuffDuration()) << "s]";
+        }
+        ss << ")";
     }
     ss << "\n"
        << "Defense: " << player->GetDefense() << "\n"
@@ -820,23 +830,26 @@ void GamePlayState::handleItemUse(int index) {
 
     switch (item->GetType()) {
         case ItemType::POTION:
-            if (item->GetName().find("Health") != std::string::npos) {
+            if (item->GetName().find("Health") != std::string::npos || item->GetName() == "Apple") {
                 int healAmount = item->GetEffectValue();
                 int oldHealth = player->GetHealth();
                 int maxHeal = player->GetMaxHealth() - oldHealth;
                 int actualHeal = std::min(healAmount, maxHeal);
                 
                 if (actualHeal > 0) {
-                    player->TakeDamage(-healAmount); // Negative damage = healing
+                    player->TakeDamage(-actualHeal); // Use actualHeal instead of healAmount
                     ss << "Used " << item->GetName() << ". Healed for " << actualHeal << " HP";
                     ss << "\nHP: " << player->GetHealth() << "/" << player->GetMaxHealth();
                     player->RemoveItem(index);
                 } else {
                     ss << "You are already at full health!";
                 }
-            } else {
-                // Handle other potion effects
-                ss << "Used " << item->GetName() << ". Effect: " << item->GetDescription();
+            } else if (item->GetName().find("Strength") != std::string::npos) {
+                // Handle strength potion
+                int strengthBonus = item->GetEffectValue();
+                player->ApplyStrengthBuff(strengthBonus);
+                ss << "Used " << item->GetName() << ". Attack increased by " << strengthBonus;
+                ss << "\nNew Attack Power: " << player->GetTotalAttack();
                 player->RemoveItem(index);
             }
             break;
@@ -1055,29 +1068,73 @@ void GamePlayState::draw(sf::RenderWindow& window) {
 
     // Draw game over/victory screen if needed
     if (gameOver) {
+        // Draw semi-transparent overlay
         sf::RectangleShape overlay(sf::Vector2f(window.getSize().x, window.getSize().y));
         overlay.setFillColor(sf::Color(0, 0, 0, 200));
         window.draw(overlay);
 
+        // Create the main text
         sf::Text endText;
         endText.setFont(font);
-        endText.setCharacterSize(48);
+        endText.setCharacterSize(72);  // Increased size for more impact
         
         if (player->GetHealth() > 0) {
-            endText.setString("Victory!\nPress Enter to return to main menu");
-            endText.setFillColor(sf::Color::Green);
+            // Victory screen
+            endText.setString("GAME WON!");
+            endText.setFillColor(sf::Color(50, 255, 50));  // Bright green
+            
+            // Create subtitle text
+            sf::Text subtitleText;
+            subtitleText.setFont(font);
+            subtitleText.setCharacterSize(36);
+            subtitleText.setString("Press Enter to return to main menu");
+            subtitleText.setFillColor(sf::Color(100, 255, 100));  // Lighter green
+            
+            // Position both texts
+            sf::FloatRect mainBounds = endText.getLocalBounds();
+            sf::FloatRect subBounds = subtitleText.getLocalBounds();
+            
+            endText.setPosition(
+                (window.getSize().x - mainBounds.width) / 2,
+                (window.getSize().y - (mainBounds.height + subBounds.height + 20)) / 2
+            );
+            
+            subtitleText.setPosition(
+                (window.getSize().x - subBounds.width) / 2,
+                endText.getPosition().y + mainBounds.height + 20
+            );
+            
+            window.draw(endText);
+            window.draw(subtitleText);
         } else {
-            endText.setString("Game Over!\nPress Enter to return to main menu");
+            // Game Over screen
+            endText.setString("GAME OVER");
             endText.setFillColor(sf::Color::Red);
+            
+            // Create subtitle text
+            sf::Text subtitleText;
+            subtitleText.setFont(font);
+            subtitleText.setCharacterSize(36);
+            subtitleText.setString("Press Enter to return to main menu");
+            subtitleText.setFillColor(sf::Color(255, 100, 100));
+            
+            // Position both texts
+            sf::FloatRect mainBounds = endText.getLocalBounds();
+            sf::FloatRect subBounds = subtitleText.getLocalBounds();
+            
+            endText.setPosition(
+                (window.getSize().x - mainBounds.width) / 2,
+                (window.getSize().y - (mainBounds.height + subBounds.height + 20)) / 2
+            );
+            
+            subtitleText.setPosition(
+                (window.getSize().x - subBounds.width) / 2,
+                endText.getPosition().y + mainBounds.height + 20
+            );
+            
+            window.draw(endText);
+            window.draw(subtitleText);
         }
-        
-        sf::FloatRect textBounds = endText.getLocalBounds();
-        endText.setPosition(
-            (window.getSize().x - textBounds.width) / 2,
-            (window.getSize().y - textBounds.height) / 2
-        );
-        
-        window.draw(endText);
     }
 }
 

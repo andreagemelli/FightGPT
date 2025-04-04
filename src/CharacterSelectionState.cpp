@@ -129,8 +129,6 @@ CharacterSelectionState::CharacterSelectionState(const std::string& name)
 
 void CharacterSelectionState::updatePositions() {
     const float windowWidth = 1200.0f;
-    const float windowHeight = 800.0f;
-    const float padding = 20.0f;
 
     // Title positioning
     sf::FloatRect titleBounds = title.getLocalBounds();
@@ -184,6 +182,10 @@ void CharacterSelectionState::updatePositions() {
 }
 
 void CharacterSelectionState::handleEvent(const sf::Event& event, sf::RenderWindow& window) {
+    // Generate boss name arrays outside the switch
+    const std::string bossFirstNames[] = {"Shadowlord", "Dreadking", "Nightbringer", "Soulreaver", "Doomweaver"};
+    const std::string bossLastNames[] = {"Vex", "Morthul", "Grimm", "Darkfang", "Bloodthorn"};
+    
     if (event.type == sf::Event::KeyPressed) {
         switch (event.key.code) {
             case sf::Keyboard::Up:
@@ -194,10 +196,14 @@ void CharacterSelectionState::handleEvent(const sf::Event& event, sf::RenderWind
                 if (selectedOption < 2) selectedOption++;
                 updatePositions(); // Update log when selection changes
                 break;
-            case sf::Keyboard::Return:
+            case sf::Keyboard::Return: {
                 Logger::info("Selected character: " + std::to_string(selectedOption));
-                nextState = std::make_unique<GamePlayState>(selectedOption, playerName);
+                // Generate boss name
+                std::string bossName = bossFirstNames[rand() % 5] + " " + bossLastNames[rand() % 5];
+                // Create StoryState instead of GamePlayState
+                nextState = std::make_unique<StoryState>(selectedOption, playerName, bossName);
                 break;
+            }
             default:
                 break;
         }

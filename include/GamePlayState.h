@@ -17,7 +17,7 @@ class Map;
 
 class GamePlayState : public GameState {
 public:
-    GamePlayState(int selectedCharacter, const std::string& playerName);
+    GamePlayState(int selectedCharacter, const std::string& playerName, const std::string& bossName);
     ~GamePlayState() override = default;
 
     void handleEvent(const sf::Event& event, sf::RenderWindow& window) override;
@@ -39,6 +39,7 @@ private:
     CombatState combatState;
     int selectedCharacter;
     std::string playerName;
+    std::string bossName;
     bool gameOver;
     int currentDiceValue;
     float diceAnimationTime;
