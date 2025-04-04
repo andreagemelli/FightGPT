@@ -63,7 +63,8 @@ private:
     sf::Sprite iconSprite;
     
     // Dice-related members
-    sf::RectangleShape diceShape;
+    sf::Texture diceTexture;
+    sf::Sprite diceSprite;
     sf::Text diceText;
     
     // Inventory-related members
@@ -90,6 +91,13 @@ private:
     void handlePlayerEscape();
     void addCombatLogMessage(const std::string& message);
     void loadClassIcon(int selectedCharacter);
+    
+    // Special ability methods
+    void handlePlayerAbility();
+    void performRageAbility();
+    void performFireballAbility();
+    void performHeadshotAbility();
+    std::string getAbilityDescription() const;
     
     // Inventory-related methods
     void initializeInventoryUI();

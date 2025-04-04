@@ -28,7 +28,12 @@ private:
     std::array<sf::RectangleShape, 3> optionBoxes;
     std::array<sf::Texture, 3> classIcons;
     std::array<sf::Sprite, 3> iconSprites;
+    std::array<sf::Texture, 3> characterTextures;
+    std::array<sf::Sprite, 3> characterSprites;
     sf::RectangleShape logPanel;
+
+    // Content storage
+    std::array<std::string, 3> descriptions_;
 
     // State
     int selectedOption;

@@ -127,15 +127,21 @@ GamePlayState::GamePlayState(int selectedCharacter, const std::string& playerNam
     updateEnemyDisplays();
 
     // Initialize dice
-    diceShape.setSize(sf::Vector2f(60, 60));
-    diceShape.setFillColor(sf::Color(200, 200, 200));
-    diceShape.setOutlineColor(sf::Color::White);
-    diceShape.setOutlineThickness(2);
-    diceShape.setPosition(320, 120);  // Position near the combat options
+    if (!diceTexture.loadFromFile("assets/icons/dice.png")) {
+        Logger::error("Failed to load dice texture!");
+        return;
+    }
+    
+    diceSprite.setTexture(diceTexture);
+    // Scale dice sprite to 60x60 pixels
+    float diceScale = 60.0f / std::max(diceTexture.getSize().x, diceTexture.getSize().y);
+    diceSprite.setScale(diceScale, diceScale);
+    diceSprite.setPosition(320, 120);  // Position near the combat options
 
     diceText.setFont(font);
     diceText.setCharacterSize(24);
-    diceText.setFillColor(sf::Color::Black);
+    diceText.setFillColor(sf::Color::Black);  // Changed to black for better visibility on dice
+    diceText.setStyle(sf::Text::Bold);  // Make the text bold for better readability
     updateDiceText();
 
     initializeInventoryUI();
@@ -198,27 +204,39 @@ void GamePlayState::addCombatLogMessage(const std::string& message) {
                 msg.find("Press") != std::string::npos ||
                 msg.find("A. Attack") != std::string::npos ||
                 msg.find("E. Try to escape") != std::string::npos ||
-                msg.find("I. Use Item") != std::string::npos) {
-                bgColor = sf::Color(100, 100, 100, 150);  // Grey for clickable options
+                msg.find("I. Use Item") != std::string::npos ||
+                msg.find("S. Use Special Ability") != std::string::npos ||  // Added special ability option
+                msg.find("1.") != std::string::npos ||  // Inventory slots
+                msg.find("2.") != std::string::npos ||
+                msg.find("3.") != std::string::npos ||
+                msg.find("4.") != std::string::npos) {
+                bgColor = sf::Color(100, 100, 100, 150);  // Grey for all keyboard input options
             }
-            else if (msg.find("You found:") != std::string::npos ||
-                     msg.find("BATTLE START") != std::string::npos ||
-                     msg.find("VS") != std::string::npos) {
-                bgColor = sf::Color(255, 255, 0, 100);  // Yellow for discoveries and battle starts
+            else if (msg.find("Enemy") != std::string::npos ||
+                     msg.find("attacks") != std::string::npos ||
+                     msg.find("CRITICAL MISS") != std::string::npos ||
+                     msg.find("Escape failed") != std::string::npos ||
+                     msg.find("Failed to escape") != std::string::npos ||
+                     msg.find("burning") != std::string::npos) {
+                bgColor = sf::Color(150, 50, 50, 150);  // Red for enemy actions and negative events
             }
             else if (msg.find(player->GetName()) != std::string::npos ||
                      msg.find("Hit!") != std::string::npos ||
                      msg.find("dodged") != std::string::npos ||
                      msg.find("Healed") != std::string::npos ||
-                     msg.find("Equipped") != std::string::npos) {
-                bgColor = sf::Color(0, 0, 255, 100);  // Blue for player actions
+                     msg.find("Equipped") != std::string::npos ||
+                     msg.find("RAGE") != std::string::npos ||
+                     msg.find("FIREBALL") != std::string::npos ||
+                     msg.find("HUNTER'S MARK") != std::string::npos ||
+                     msg.find("Your HP:") != std::string::npos ||
+                     msg.find("Successfully escaped") != std::string::npos) {
+                bgColor = sf::Color(0, 0, 255, 100);  // Blue for player actions and positive events
             }
-            else if (msg.find("Enemy's turn") != std::string::npos ||
-                     msg.find("attacks") != std::string::npos ||
-                     msg.find("Enemy HP") != std::string::npos ||
-                     msg.find("CRITICAL MISS") != std::string::npos ||
-                     msg.find("Escape failed") != std::string::npos) {
-                bgColor = sf::Color(150, 50, 50, 150);  // Red for enemy/danger
+            else if (msg.find("You found:") != std::string::npos ||
+                     msg.find("BATTLE START") != std::string::npos ||
+                     msg.find("VS") != std::string::npos ||
+                     msg.find("=== BATTLE WON! ===") != std::string::npos) {
+                bgColor = sf::Color(255, 255, 0, 100);  // Yellow for discoveries and battle events
             }
             else {
                 bgColor = sf::Color(0, 0, 0, 0);  // Transparent for normal messages
@@ -283,7 +301,7 @@ void GamePlayState::initializeStats() {
 void GamePlayState::handleEvent(const sf::Event& event, sf::RenderWindow& /*window*/) {
     if (gameOver) {
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Return) {
-            nextState = std::make_unique<CharacterSelectionState>("");
+            nextState = std::make_unique<CharacterSelectionState>("");  // Pass empty string to return to name screen
             return;
         }
         return;
@@ -309,6 +327,9 @@ void GamePlayState::handleEvent(const sf::Event& event, sf::RenderWindow& /*wind
                     CombatLogger::log("\nChoose item (1-4) to use or change weapon");
                     CombatLogger::log("Current inventory:");
                     displayInventoryInLog();
+                }
+                else if (event.key.code == sf::Keyboard::S && !player->HasUsedAbility()) {
+                    handlePlayerAbility();
                 }
             }
             return;
@@ -375,6 +396,7 @@ void GamePlayState::handleCombat(Character* enemy) {
     if (combatState == CombatState::NOT_IN_COMBAT) {
         currentEnemy = enemy;
         combatState = CombatState::PLAYER_TURN;
+        player->ResetAbility(); // Reset ability at the start of combat
         
         // Clear previous combat messages
         combatLog.clear();
@@ -390,6 +412,9 @@ void GamePlayState::handleCombat(Character* enemy) {
         CombatLogger::log("A. Attack");
         CombatLogger::log("E. Try to escape");
         CombatLogger::log("I. Use Item/Change Weapon");
+        if (!player->HasUsedAbility()) {
+            CombatLogger::log("S. Use Special Ability: " + getAbilityDescription());
+        }
         return;
     }
 
@@ -418,11 +443,20 @@ void GamePlayState::handleCombat(Character* enemy) {
 void GamePlayState::handleEnemyTurn(Character* enemy) {
     if (!enemy) return;
     
-    // Apply bleed damage if wounded
+    // Apply status effects first
     if (player->IsWounded()) {
-        CombatLogger::log("\nYou are bleeding! (-5 HP)");
         player->ApplyBleedDamage();
         updateStatsText();
+    }
+    
+    if (enemy->IsBurning()) {
+        CombatLogger::log("\nEnemy is burning! (-5 HP)");
+        enemy->ApplyBurnDamage();
+        
+        if (enemy->IsDefeated()) {
+            handleVictory(*enemy);
+            return;
+        }
     }
     
     CombatLogger::log("\nEnemy's turn!");
@@ -444,13 +478,21 @@ void GamePlayState::handleEnemyTurn(Character* enemy) {
         return;
     }
     
-    updateStatsText();  // Update stats display after taking damage
+    updateStatsText();
+    
+    // Deactivate Rage after enemy's turn if it was active
+    if (player->IsRageActive()) {
+        player->DeactivateRage();
+    }
     
     combatState = CombatState::PLAYER_TURN;
     CombatLogger::log("\nYour turn! Choose your action:");
     CombatLogger::log("A. Attack");
     CombatLogger::log("E. Try to escape");
     CombatLogger::log("I. Use Item/Change Weapon");
+    if (!player->HasUsedAbility()) {
+        CombatLogger::log("S. Use Special Ability: " + getAbilityDescription());
+    }
 }
 
 void GamePlayState::handleVictory(Character& enemy) {
@@ -464,6 +506,7 @@ void GamePlayState::handleVictory(Character& enemy) {
     if (enemy.GetBoss()) {
         CombatLogger::log("Congratulations! You've defeated the boss!");
         gameOver = true;
+        nextState = std::make_unique<CharacterSelectionState>("");  // Pass empty string to return to name screen
     }
     
     combatState = CombatState::NOT_IN_COMBAT;
@@ -527,6 +570,15 @@ void GamePlayState::updateEnemyDisplays() {
 
 void GamePlayState::handlePlayerAttack() {
     if (!currentEnemy) return;
+    
+    // If Rage is active, skip dice roll and perform critical hit immediately
+    if (player->IsRageActive()) {
+        CombatLogger::log("\nRAGE CRITICAL HIT!");
+        performPlayerAttack(true);  // Force critical hit
+        player->DeactivateRage();  // Consume Rage after use
+        return;
+    }
+    
     startDiceRoll();
 }
 
@@ -538,10 +590,21 @@ void GamePlayState::handlePlayerEscape() {
 
 void GamePlayState::updateDiceText() {
     diceText.setString(std::to_string(currentDiceValue));
-    // Center the text in the dice
+    
+    // Get the actual bounds of the dice sprite
+    sf::FloatRect diceBounds = diceSprite.getGlobalBounds();
+    
+    // Get the text bounds
     sf::FloatRect textBounds = diceText.getLocalBounds();
-    float xPos = diceShape.getPosition().x + (diceShape.getSize().x - textBounds.width) / 2.0f - textBounds.left;
-    float yPos = diceShape.getPosition().y + (diceShape.getSize().y - textBounds.height) / 2.0f - textBounds.top;
+    
+    // Calculate the center position of the dice sprite
+    float centerX = diceBounds.left + (diceBounds.width / 2.0f);
+    float centerY = diceBounds.top + (diceBounds.height / 2.0f);
+    
+    // Position the text at the center, accounting for the text bounds offset
+    float xPos = centerX - (textBounds.width / 2.0f) - textBounds.left;
+    float yPos = centerY - (textBounds.height / 2.0f) - textBounds.top;
+    
     diceText.setPosition(xPos, yPos);
 }
 
@@ -557,13 +620,15 @@ void GamePlayState::updateDiceRoll(float deltaTime) {
     
     // Update dice value rapidly during animation
     if (diceAnimationTime < 1.0f) {  // Roll for 1 second
-        currentDiceValue = (rand() % 20) + 1;
+        // If rage is active, show only high numbers during animation for effect
+        if (player->IsRageActive()) {
+            currentDiceValue = 20;
+        } else {
+            currentDiceValue = (rand() % 20) + 1;
+        }
         updateDiceText();
     } else {
         isRollingDice = false;
-        // Final roll
-        currentDiceValue = rollD20();
-        updateDiceText();
         
         // Handle the result based on current action
         if (combatState == CombatState::PLAYER_TURN) {
@@ -575,30 +640,41 @@ void GamePlayState::updateDiceRoll(float deltaTime) {
 }
 
 void GamePlayState::handleDiceResult(int roll, bool isAttack) {
-    // Clear previous messages
-    combatLog.clear();
-    combatLogTexts.clear();
-    combatLogBackgrounds.clear();
-    
     std::stringstream ss;
     ss << "\nDice roll: " << roll;
+    CombatLogger::log(ss.str());
     
     if (isAttack) {
+        // If Rage is active, force critical hit and deactivate rage
+        if (player->IsRageActive()) {
+            ss.str("");  // Clear stringstream
+            ss << " - RAGE CRITICAL HIT!";
+            CombatLogger::log(ss.str());
+            performPlayerAttack(true);  // Force critical hit
+            player->DeactivateRage();  // Deactivate rage after use
+            return;
+        }
+        
+        // Normal attack resolution
         if (roll == 20) {
             ss << " - CRITICAL HIT!";
             CombatLogger::log(ss.str());
-            performPlayerAttack(true);  // true for critical hit
-        } else if (roll == 1) {
+            performPlayerAttack(true);
+        } else if (roll == 1 && !player->HasMarker()) {
             ss << " - CRITICAL MISS! You are wounded!";
             CombatLogger::log(ss.str());
             player->SetWounded(true);
             combatState = CombatState::ENEMY_TURN;
             sf::sleep(sf::milliseconds(500));
             handleEnemyTurn(currentEnemy);
-        } else if (roll >= 10) {
-            ss << " - Hit!";
+        } else if (roll >= 10 || player->HasMarker()) {
+            ss << (player->HasMarker() ? " - MARKED TARGET HIT!" : " - Hit!");
             CombatLogger::log(ss.str());
-            performPlayerAttack(false);  // false for normal hit
+            performPlayerAttack(false);
+            
+            if (player->HasMarker()) {
+                player->DecrementMarker();
+            }
         } else {
             ss << " - Miss!";
             CombatLogger::log(ss.str());
@@ -607,7 +683,7 @@ void GamePlayState::handleDiceResult(int roll, bool isAttack) {
             handleEnemyTurn(currentEnemy);
         }
     } else {
-        // Need 10 or higher to escape
+        // Escape logic remains unchanged
         if (roll >= 10) {
             ss << " - Escape successful!";
             CombatLogger::log(ss.str());
@@ -627,11 +703,6 @@ void GamePlayState::handleDiceResult(int roll, bool isAttack) {
 void GamePlayState::performPlayerAttack(bool isCritical) {
     if (!currentEnemy) return;
     
-    // Clear previous messages
-    combatLog.clear();
-    combatLogTexts.clear();
-    combatLogBackgrounds.clear();
-    
     int damage = player->GetTotalAttack(); // Use total attack including weapon bonus
     if (isCritical) {
         damage *= 2;  // Double damage on critical hit
@@ -645,6 +716,9 @@ void GamePlayState::performPlayerAttack(bool isCritical) {
            << " for " << actualDamage << " damage";
         if (isCritical) {
             ss << " (CRITICAL HIT!)";
+        }
+        if (player->HasMarker()) {
+            ss << " (MARKED TARGET: " << player->GetMarkerCount() << " marks remaining)";
         }
         if (auto weapon = player->GetEquippedWeapon()) {
             ss << " with " << weapon->GetName();
@@ -733,7 +807,7 @@ void GamePlayState::handleItemPickup() {
         showingItemPrompt = false;
         currentItem = nullptr;
     } else {
-        addCombatLogMessage("Inventory is full!");
+        addCombatLogMessage("Inventory is full! Press 'L' to leave the item.");
     }
 }
 
@@ -824,6 +898,84 @@ void GamePlayState::displayInventoryInLog() {
     }
 }
 
+void GamePlayState::handlePlayerAbility() {
+    if (!currentEnemy || player->HasUsedAbility()) return;
+ 
+    switch (selectedCharacter) {
+        case 0: // Knight
+            performRageAbility();
+            // Knight should NOT go to enemy turn, just activate rage and wait for next attack
+            break;
+        case 1: // Mage
+            performFireballAbility();
+            break;
+        case 2: // Archer
+            performHeadshotAbility();
+            // Archer waits for next turn
+            combatState = CombatState::ENEMY_TURN;
+            sf::sleep(sf::milliseconds(500));
+            handleEnemyTurn(currentEnemy);
+            break;
+    }
+}
+
+void GamePlayState::performRageAbility() {
+    player->ActivateRage();
+    player->SetAbilityUsed(true);  // Mark ability as used
+    CombatLogger::log("\nRAGE ACTIVATED! Your next attack will be a critical hit!");
+    // Show combat options again since we're staying in player turn
+    CombatLogger::log("\nYour turn! Choose your action:");
+    CombatLogger::log("A. Attack");
+    CombatLogger::log("E. Try to escape");
+    CombatLogger::log("I. Use Item/Change Weapon");
+}
+
+void GamePlayState::performFireballAbility() {
+    // Calculate 15% of enemy's max health for Fireball damage
+    float damagePercent = 0.15f;  // 15%
+    int maxHealth = currentEnemy->GetMaxHealth();
+    int burnDamage = static_cast<int>(maxHealth * damagePercent);
+    
+    // Ensure minimum damage of 1
+    burnDamage = std::max(1, burnDamage);
+    
+    int actualDamage = currentEnemy->TakeDamage(burnDamage);
+    currentEnemy->ApplyBurn();
+    player->SetAbilityUsed(true);
+    
+    std::stringstream ss;
+    ss << "\nFIREBALL! Dealt " << actualDamage << " damage (" << (damagePercent * 100) << "% of max HP) and applied burn effect!";
+    ss << "\nEnemy HP: " << currentEnemy->GetHealth() << "/" << currentEnemy->GetMaxHealth();
+    CombatLogger::log(ss.str());
+    
+    if (currentEnemy->IsDefeated()) {
+        handleVictory(*currentEnemy);
+        return;
+    }
+    
+    combatState = CombatState::ENEMY_TURN;
+    sf::sleep(sf::milliseconds(500));
+    handleEnemyTurn(currentEnemy);
+}
+
+void GamePlayState::performHeadshotAbility() {
+    player->ActivateMarker();
+    CombatLogger::log("\nHUNTER'S MARK ACTIVATED! Your next three attacks cannot miss!");
+}
+
+std::string GamePlayState::getAbilityDescription() const {
+    switch (selectedCharacter) {
+        case 0: // Knight
+            return "Rage (Next attack is a critical hit)";
+        case 1: // Mage
+            return "Fireball (15% max HP damage + 5 damage/turn)";
+        case 2: // Archer
+            return "Hunter's Mark (Next 3 attacks cannot miss)";
+        default:
+            return "";
+    }
+}
+
 void GamePlayState::draw(sf::RenderWindow& window) {
     window.clear(sf::Color(40, 40, 40));
 
@@ -855,7 +1007,7 @@ void GamePlayState::draw(sf::RenderWindow& window) {
     }
 
     // Draw dice
-    window.draw(diceShape);
+    window.draw(diceSprite);
     window.draw(diceText);
 
     // Draw inventory

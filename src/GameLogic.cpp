@@ -288,14 +288,14 @@ std::vector<std::shared_ptr<Item>> Map::CreateRandomItems(int count) {
     // Define possible items
     std::vector<std::shared_ptr<Item>> possibleItems = {
         // Potions
-        std::make_shared<Item>("Health Potion", "Restores 30 HP", ItemType::POTION, 30),
-        std::make_shared<Item>("Greater Health Potion", "Restores 50 HP", ItemType::POTION, 50),
+        std::make_shared<Item>("Apple", "Restores 30 HP", ItemType::POTION, 30),
+        std::make_shared<Item>("Health Potion", "Restores 50 HP", ItemType::POTION, 50),
         std::make_shared<Item>("Strength Potion", "Temporarily increases attack by 10", ItemType::POTION, 10),
         
         // Weapons
-        std::make_shared<Item>("Sharp Sword", "Increases attack by 15", ItemType::WEAPON, 15),
-        std::make_shared<Item>("Battle Axe", "Increases attack by 20", ItemType::WEAPON, 20),
-        std::make_shared<Item>("Legendary Blade", "Increases attack by 30", ItemType::WEAPON, 30),
+        std::make_shared<Item>("Throwing Knife", "Increases attack by 15", ItemType::WEAPON, 15),
+        std::make_shared<Item>("Void staff", "Increases attack by 20", ItemType::WEAPON, 20),
+        std::make_shared<Item>("Legendary Sword", "Increases attack by 30", ItemType::WEAPON, 30),
         
         // Objects
         std::make_shared<Item>("Boss Compass", "Reveals the boss location", ItemType::OBJECT, 0, ObjectEffect::REVEAL_BOSS),

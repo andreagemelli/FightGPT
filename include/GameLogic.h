@@ -54,6 +54,12 @@ protected:
     std::vector<std::shared_ptr<Item>> inventory;
     std::shared_ptr<Item> equipped_weapon;
     static const int MAX_INVENTORY_SIZE = 4;
+    
+    // Special ability properties
+    bool abilityUsed;
+    bool isRage;        // For Knight: when true, forces critical hit
+    int markerCount;    // For Archer: counts remaining guaranteed hits
+    bool burnActive;    // For Mage: tracks if enemy is burning
 
 public:
     Character() {}
@@ -71,7 +77,11 @@ public:
           x(0), 
           y(0),
           boss(false),
-          isWounded(false) {}
+          isWounded(false),
+          abilityUsed(false),
+          isRage(false),
+          markerCount(0),
+          burnActive(false) {}
 
     virtual ~Character() = default;
 
@@ -151,6 +161,49 @@ public:
             total += equipped_weapon->GetEffectValue();
         }
         return total;
+    }
+
+    // Special ability methods
+    bool HasUsedAbility() const { return abilityUsed; }
+    void SetAbilityUsed(bool used) { abilityUsed = used; }
+    
+    void ResetAbility() { 
+        abilityUsed = false;
+        isRage = false;
+        markerCount = 0;
+        burnActive = false;
+    }
+    
+    // Rage ability
+    bool IsRageActive() const { return isRage; }
+    void ActivateRage() { 
+        isRage = true;
+        abilityUsed = true;
+    }
+    void DeactivateRage() { isRage = false; }
+    
+    // Hunter's Mark ability
+    bool HasMarker() const { return markerCount > 0; }
+    int GetMarkerCount() const { return markerCount; }
+    void ActivateMarker() {
+        markerCount = 3;
+        abilityUsed = true;
+    }
+    void DecrementMarker() {
+        if (markerCount > 0) {
+            markerCount--;
+        }
+    }
+    
+    // Burn ability
+    bool IsBurning() const { return burnActive; }
+    void ApplyBurn() {
+        burnActive = true;
+    }
+    void ApplyBurnDamage() {
+        if (burnActive) {
+            health = std::max(1, health - 5); // 5 HP burn damage per turn
+        }
     }
 };
 
