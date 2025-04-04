@@ -1,13 +1,14 @@
 #pragma once
 
 #include "GameState.h"
+#include "StoryState.h"
 #include <SFML/Graphics.hpp>
 #include <array>
 #include <string>
 
 class CharacterSelectionState : public GameState {
 public:
-    CharacterSelectionState(const std::string& playerName);
+    explicit CharacterSelectionState(const std::string& name);
     ~CharacterSelectionState() override = default;
 
     void handleEvent(const sf::Event& event, sf::RenderWindow& window) override;
@@ -16,18 +17,20 @@ public:
 
 private:
     void updatePositions();
-    void loadIcons();
 
+    // Text elements
     sf::Font font;
     sf::Text title;
     std::array<sf::Text, 3> options;
+    sf::Text logText;
+
+    // Visual elements
     std::array<sf::RectangleShape, 3> optionBoxes;
     std::array<sf::Texture, 3> classIcons;
     std::array<sf::Sprite, 3> iconSprites;
-    sf::RectangleShape background;
+    sf::RectangleShape logPanel;
+
+    // State
     int selectedOption;
     std::string playerName;
-    
-    void initializeText();
-    void initializeBoxes();
 }; 

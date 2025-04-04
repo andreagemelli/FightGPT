@@ -2,6 +2,8 @@
 #include "CharacterSelectionState.h"
 #include "Logger.h"
 #include <sstream>
+#include <cstdlib>
+#include <ctime>
 
 class CombatLogger {
 public:
@@ -32,10 +34,20 @@ GamePlayState::GamePlayState(int selectedCharacter, const std::string& playerNam
       gameOver(false),
       currentDiceValue(1),
       diceAnimationTime(0),
-      isRollingDice(false) {
+      isRollingDice(false),
+      showingItemPrompt(false),
+      currentItem(nullptr),
+      bossRevealed(false),
+      itemsRevealed(false),
+      monstersRevealed(false) {
+
+    if (!font.loadFromFile("assets/fonts/Jersey15-Regular.ttf")) {
+        Logger::error("Failed to load font!");
+        return;
+    }
     
     // Initialize player shape
-    playerShape.setSize(sf::Vector2f(40, 40));
+    playerShape.setSize(sf::Vector2f(30, 30));
     playerShape.setFillColor(sf::Color::Blue);
     playerShape.setOutlineColor(sf::Color::White);
     playerShape.setOutlineThickness(2);
@@ -52,12 +64,27 @@ GamePlayState::GamePlayState(int selectedCharacter, const std::string& playerNam
     characterInfoBox.setOutlineColor(sf::Color(200, 200, 200));
     characterInfoBox.setOutlineThickness(2);
 
-    // Initialize combat log box
-    combatLogBox.setSize(sf::Vector2f(leftColumnWidth - 2 * padding, 800 - statsHeight - 3 * padding));
-    combatLogBox.setPosition(padding, statsHeight + 2 * padding);
+    // Initialize inventory box with smaller height
+    inventoryBox.setSize(sf::Vector2f(leftColumnWidth - 2 * padding, 120));  // Reduced height
+    inventoryBox.setPosition(padding, statsHeight + padding);
+    inventoryBox.setFillColor(sf::Color(60, 60, 60));
+    inventoryBox.setOutlineColor(sf::Color(200, 200, 200));
+    inventoryBox.setOutlineThickness(2);
+
+    // Initialize combat log box - position it below inventory with proper spacing
+    float combatLogY = statsHeight + inventoryBox.getSize().y + 2 * padding;
+    float combatLogHeight = 800 - combatLogY - 2 * padding;
+    
+    combatLogBox.setSize(sf::Vector2f(leftColumnWidth - 2 * padding, combatLogHeight));
+    combatLogBox.setPosition(padding, combatLogY);
     combatLogBox.setFillColor(sf::Color(60, 60, 60));
     combatLogBox.setOutlineColor(sf::Color(200, 200, 200));
     combatLogBox.setOutlineThickness(2);
+
+    // Initialize combat log background
+    combatLogBackground.setSize(sf::Vector2f(leftColumnWidth - 4 * padding, combatLogHeight - 2 * padding));
+    combatLogBackground.setFillColor(sf::Color(0, 0, 0, 200));
+    combatLogBackground.setPosition(padding * 2, combatLogY + padding);
 
     // Load class icon
     loadClassIcon(selectedCharacter);
@@ -77,11 +104,6 @@ GamePlayState::GamePlayState(int selectedCharacter, const std::string& playerNam
     healthBar.setFillColor(sf::Color::Green);
     healthBar.setPosition(padding + 48.0f, 40);
 
-    // Initialize combat log with larger size
-    combatLogBackground.setSize(sf::Vector2f(leftColumnWidth - 4 * padding, 800 - statsHeight - 5 * padding));
-    combatLogBackground.setFillColor(sf::Color(0, 0, 0, 200));
-    combatLogBackground.setPosition(padding * 2, statsHeight + 3 * padding);
-
     // Set up the combat logger callback
     CombatLogger::setCallback([this](const std::string& message) {
         addCombatLogMessage(message);
@@ -90,11 +112,6 @@ GamePlayState::GamePlayState(int selectedCharacter, const std::string& playerNam
     // Initialize stats
     initializeStats();
 
-    // Try to load font
-    if (!font.loadFromFile("assets/fonts/Jersey15-Regular.ttf")) {
-        Logger::error("Failed to load font!");
-    }
-    
     // Initialize text elements
     statsText.setFont(font);
     statsText.setCharacterSize(16);
@@ -120,6 +137,8 @@ GamePlayState::GamePlayState(int selectedCharacter, const std::string& playerNam
     diceText.setCharacterSize(24);
     diceText.setFillColor(sf::Color::Black);
     updateDiceText();
+
+    initializeInventoryUI();
 }
 
 void GamePlayState::loadClassIcon(int selectedCharacter) {
@@ -159,7 +178,10 @@ void GamePlayState::addCombatLogMessage(const std::string& message) {
 
     // Update combat log texts
     combatLogTexts.clear();
-    float yPos = 200; // Start below the stats section
+    combatLogBackgrounds.clear();
+    
+    // Calculate starting Y position - now positioned below inventory
+    float yPos = combatLogBox.getPosition().y + 10;
     
     if (font.getInfo().family != "") {
         for (const auto& msg : combatLog) {
@@ -168,16 +190,45 @@ void GamePlayState::addCombatLogMessage(const std::string& message) {
             text.setString(msg);
             text.setCharacterSize(16);
             text.setFillColor(sf::Color::White);
-            text.setPosition(20, yPos);
+            text.setPosition(combatLogBox.getPosition().x + 10, yPos);
             
-            // Add a subtle background for combat messages
-            if (msg.find("BATTLE") != std::string::npos || 
-                msg.find("attacks") != std::string::npos ||
-                msg.find("HP:") != std::string::npos) {
+            // Add backgrounds with different colors for different message types
+            sf::Color bgColor;
+            if (msg.find("Choose your action") != std::string::npos ||
+                msg.find("Press") != std::string::npos ||
+                msg.find("A. Attack") != std::string::npos ||
+                msg.find("E. Try to escape") != std::string::npos ||
+                msg.find("I. Use Item") != std::string::npos) {
+                bgColor = sf::Color(100, 100, 100, 150);  // Grey for clickable options
+            }
+            else if (msg.find("You found:") != std::string::npos ||
+                     msg.find("BATTLE START") != std::string::npos ||
+                     msg.find("VS") != std::string::npos) {
+                bgColor = sf::Color(255, 255, 0, 100);  // Yellow for discoveries and battle starts
+            }
+            else if (msg.find(player->GetName()) != std::string::npos ||
+                     msg.find("Hit!") != std::string::npos ||
+                     msg.find("dodged") != std::string::npos ||
+                     msg.find("Healed") != std::string::npos ||
+                     msg.find("Equipped") != std::string::npos) {
+                bgColor = sf::Color(0, 0, 255, 100);  // Blue for player actions
+            }
+            else if (msg.find("Enemy's turn") != std::string::npos ||
+                     msg.find("attacks") != std::string::npos ||
+                     msg.find("Enemy HP") != std::string::npos ||
+                     msg.find("CRITICAL MISS") != std::string::npos ||
+                     msg.find("Escape failed") != std::string::npos) {
+                bgColor = sf::Color(150, 50, 50, 150);  // Red for enemy/danger
+            }
+            else {
+                bgColor = sf::Color(0, 0, 0, 0);  // Transparent for normal messages
+            }
+
+            if (bgColor.a > 0) {
                 sf::RectangleShape background;
-                background.setSize(sf::Vector2f(360, 20));
-                background.setPosition(15, yPos);
-                background.setFillColor(sf::Color(60, 60, 60, 150));
+                background.setSize(sf::Vector2f(combatLogBox.getSize().x - 20, 20));
+                background.setPosition(combatLogBox.getPosition().x + 5, yPos);
+                background.setFillColor(bgColor);
                 combatLogBackgrounds.push_back(background);
             }
             
@@ -229,17 +280,24 @@ void GamePlayState::initializeStats() {
     CombatLogger::log(ss.str());
 }
 
-void GamePlayState::handleEvent(const sf::Event& event, sf::RenderWindow& window) {
+void GamePlayState::handleEvent(const sf::Event& event, sf::RenderWindow& /*window*/) {
     if (gameOver) {
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Return) {
-            nextState = std::make_unique<CharacterSelectionState>(playerName);
+            nextState = std::make_unique<CharacterSelectionState>("");
             return;
         }
         return;
     }
 
-    if (combatState != CombatState::NOT_IN_COMBAT) {
-        if (event.type == sf::Event::KeyPressed) {
+    if (event.type == sf::Event::KeyPressed) {
+        // Handle inventory hotkeys (1-4) - allow using items anytime
+        if (event.key.code >= sf::Keyboard::Num1 && event.key.code <= sf::Keyboard::Num4) {
+            int index = event.key.code - sf::Keyboard::Num1;
+            handleItemUse(index);
+            return;
+        }
+
+        if (combatState != CombatState::NOT_IN_COMBAT) {
             if (combatState == CombatState::PLAYER_TURN) {
                 if (event.key.code == sf::Keyboard::A) {
                     handlePlayerAttack();
@@ -247,40 +305,68 @@ void GamePlayState::handleEvent(const sf::Event& event, sf::RenderWindow& window
                 else if (event.key.code == sf::Keyboard::E) {
                     handlePlayerEscape();
                 }
+                else if (event.key.code == sf::Keyboard::I) {
+                    CombatLogger::log("\nChoose item (1-4) to use or change weapon");
+                    CombatLogger::log("Current inventory:");
+                    displayInventoryInLog();
+                }
             }
+            return;
         }
-        return;
-    }
 
-    if (event.type != sf::Event::KeyPressed) return;
+        // Handle item interaction
+        if (showingItemPrompt) {
+            if (event.key.code == sf::Keyboard::P) {
+                handleItemPickup();
+                return;
+            } else if (event.key.code == sf::Keyboard::L) {
+                // Remove item from map but don't add to inventory
+                gameMap->RemoveItemAtPosition(player->GetX(), player->GetY());
+                showingItemPrompt = false;
+                currentItem = nullptr;
+                addCombatLogMessage("You left the item behind.");
+                return;
+            }
+            return;
+        }
 
-    int dx = 0, dy = 0;
-    switch (event.key.code) {
-        case sf::Keyboard::Left:  dx = -1; break;
-        case sf::Keyboard::Right: dx = 1;  break;
-        case sf::Keyboard::Up:    dy = -1; break;
-        case sf::Keyboard::Down:  dy = 1;  break;
-        default: return;
-    }
+        // Handle movement
+        if (event.key.code == sf::Keyboard::Left || event.key.code == sf::Keyboard::Right ||
+            event.key.code == sf::Keyboard::Up || event.key.code == sf::Keyboard::Down) {
+            int dx = 0, dy = 0;
+            if (event.key.code == sf::Keyboard::Left)  dx = -1;
+            else if (event.key.code == sf::Keyboard::Right) dx = 1;
+            else if (event.key.code == sf::Keyboard::Up)    dy = -1;
+            else if (event.key.code == sf::Keyboard::Down)  dy = 1;
 
-    Character* enemy = gameMap->CheckNewPosition(*player, dx, dy);
-    if (enemy) {
-        handleCombat(enemy);
-    } else if (dx != 0 || dy != 0) {  // Only log movement if actually moving
-        int newX = player->GetX() + dx;
-        int newY = player->GetY() + dy;
-        
-        // Check map boundaries
-        if (newX >= 0 && newX < 15 && newY >= 0 && newY < 15) {
-            gameMap->MoveCharacter(*player, dx, dy);
-            std::stringstream ss;
-            ss << "\nMoved to position (" << player->GetX() << ", " << player->GetY() << ")";
-            CombatLogger::log(ss.str());
+            Character* enemy = gameMap->CheckNewPosition(*player, dx, dy);
+            if (enemy) {
+                handleCombat(enemy);
+            } else if (dx != 0 || dy != 0) {  // Only log movement if actually moving
+                int newX = player->GetX() + dx;
+                int newY = player->GetY() + dy;
+                
+                // Check map boundaries
+                if (newX >= 0 && newX < 15 && newY >= 0 && newY < 15) {
+                    gameMap->MoveCharacter(*player, dx, dy);
+                    std::stringstream ss;
+                    ss << "\nMoved to position (" << player->GetX() << ", " << player->GetY() << ")";
+                    CombatLogger::log(ss.str());
+                }
+            }
+
+            updateStatsText();
+            updateEnemyDisplays();
+            return;
         }
     }
 
-    updateStatsText();
-    updateEnemyDisplays();
+    // Check for items at player's position
+    if (!showingItemPrompt && combatState == CombatState::NOT_IN_COMBAT) {
+        checkForItems();
+    }
+
+    updateInventoryDisplay();
 }
 
 void GamePlayState::handleCombat(Character* enemy) {
@@ -289,14 +375,21 @@ void GamePlayState::handleCombat(Character* enemy) {
     if (combatState == CombatState::NOT_IN_COMBAT) {
         currentEnemy = enemy;
         combatState = CombatState::PLAYER_TURN;
+        
+        // Clear previous combat messages
+        combatLog.clear();
+        combatLogTexts.clear();
+        combatLogBackgrounds.clear();
+        
         std::stringstream ss;
         ss << "\n=== BATTLE START ===\n";
-        ss << player->GetName() << " (HP: " << player->GetHealth() << ") VS " 
-           << enemy->GetName() << " (HP: " << enemy->GetHealth() << ")";
+        ss << player->GetName() << " (HP: " << player->GetHealth() << "/" << player->GetMaxHealth() << ") VS " 
+           << enemy->GetName() << " (HP: " << enemy->GetHealth() << "/" << enemy->GetMaxHealth() << ")";
         CombatLogger::log(ss.str());
         CombatLogger::log("\nYour turn! Choose your action:");
         CombatLogger::log("A. Attack");
         CombatLogger::log("E. Try to escape");
+        CombatLogger::log("I. Use Item/Change Weapon");
         return;
     }
 
@@ -351,10 +444,13 @@ void GamePlayState::handleEnemyTurn(Character* enemy) {
         return;
     }
     
+    updateStatsText();  // Update stats display after taking damage
+    
     combatState = CombatState::PLAYER_TURN;
     CombatLogger::log("\nYour turn! Choose your action:");
     CombatLogger::log("A. Attack");
     CombatLogger::log("E. Try to escape");
+    CombatLogger::log("I. Use Item/Change Weapon");
 }
 
 void GamePlayState::handleVictory(Character& enemy) {
@@ -382,12 +478,18 @@ void GamePlayState::update(float deltaTime) {
     
     // Update dice animation
     updateDiceRoll(deltaTime);
+
+    // Check for items at player's position
+    if (!showingItemPrompt && combatState == CombatState::NOT_IN_COMBAT) {
+        checkForItems();
+    }
+
+    updateInventoryDisplay();
 }
 
 void GamePlayState::updateStatsText() {
     // Update character name
     characterNameText.setString(player->GetName() + (player->IsWounded() ? " 🩸" : ""));
-    sf::FloatRect nameBounds = characterNameText.getLocalBounds();
     characterNameText.setPosition(10, 10);
 
     // Calculate experience needed for next level
@@ -399,7 +501,13 @@ void GamePlayState::updateStatsText() {
     ss << "Level: " << player->GetLevel() << "\n"
        << "HP: " << player->GetHealth() << "/" << player->GetMaxHealth() 
        << (player->IsWounded() ? " 🩸" : "") << "\n"
-       << "Attack: " << player->GetAttack() << "\n"
+       << "Base Attack: " << player->GetAttack();
+    
+    // Show total attack if different from base
+    if (player->GetTotalAttack() != player->GetAttack()) {
+        ss << " (Total: " << player->GetTotalAttack() << ")";
+    }
+    ss << "\n"
        << "Defense: " << player->GetDefense() << "\n"
        << "Speed: " << player->GetSpeed() << "\n"
        << "Avoidance: " << player->GetAvoidance() << "%\n"
@@ -432,10 +540,9 @@ void GamePlayState::updateDiceText() {
     diceText.setString(std::to_string(currentDiceValue));
     // Center the text in the dice
     sf::FloatRect textBounds = diceText.getLocalBounds();
-    diceText.setPosition(
-        diceShape.getPosition().x + (diceShape.getSize().x - textBounds.width) / 2,
-        diceShape.getPosition().y + (diceShape.getSize().y - textBounds.height) / 2
-    );
+    float xPos = diceShape.getPosition().x + (diceShape.getSize().x - textBounds.width) / 2.0f - textBounds.left;
+    float yPos = diceShape.getPosition().y + (diceShape.getSize().y - textBounds.height) / 2.0f - textBounds.top;
+    diceText.setPosition(xPos, yPos);
 }
 
 void GamePlayState::startDiceRoll() {
@@ -468,6 +575,11 @@ void GamePlayState::updateDiceRoll(float deltaTime) {
 }
 
 void GamePlayState::handleDiceResult(int roll, bool isAttack) {
+    // Clear previous messages
+    combatLog.clear();
+    combatLogTexts.clear();
+    combatLogBackgrounds.clear();
+    
     std::stringstream ss;
     ss << "\nDice roll: " << roll;
     
@@ -515,7 +627,12 @@ void GamePlayState::handleDiceResult(int roll, bool isAttack) {
 void GamePlayState::performPlayerAttack(bool isCritical) {
     if (!currentEnemy) return;
     
-    int damage = player->GetAttack();
+    // Clear previous messages
+    combatLog.clear();
+    combatLogTexts.clear();
+    combatLogBackgrounds.clear();
+    
+    int damage = player->GetTotalAttack(); // Use total attack including weapon bonus
     if (isCritical) {
         damage *= 2;  // Double damage on critical hit
     }
@@ -528,6 +645,9 @@ void GamePlayState::performPlayerAttack(bool isCritical) {
            << " for " << actualDamage << " damage";
         if (isCritical) {
             ss << " (CRITICAL HIT!)";
+        }
+        if (auto weapon = player->GetEquippedWeapon()) {
+            ss << " with " << weapon->GetName();
         }
         ss << "!\nEnemy HP: " << currentEnemy->GetHealth() << "/" << currentEnemy->GetMaxHealth();
     } else {
@@ -544,6 +664,164 @@ void GamePlayState::performPlayerAttack(bool isCritical) {
     combatState = CombatState::ENEMY_TURN;
     sf::sleep(sf::milliseconds(500));
     handleEnemyTurn(currentEnemy);
+}
+
+void GamePlayState::initializeInventoryUI() {
+    const float padding = 10.0f;
+    const float startX = inventoryBox.getPosition().x + padding;
+    const float startY = inventoryBox.getPosition().y + padding;
+
+    // Create inventory title
+    sf::Text titleText;
+    titleText.setFont(font);
+    titleText.setString("Inventory");
+    titleText.setCharacterSize(16);
+    titleText.setFillColor(sf::Color::White);
+    titleText.setPosition(startX, startY);
+    inventoryTexts.push_back(titleText);
+
+    // Create 4 inventory slots as simple text
+    for (int i = 0; i < 4; ++i) {
+        sf::Text slotText;
+        slotText.setFont(font);
+        slotText.setCharacterSize(14);
+        slotText.setFillColor(sf::Color::White);
+        slotText.setPosition(startX, startY + 25 + i * 20);  // Compact vertical spacing
+        slotText.setString(std::to_string(i + 1) + ".");
+        inventoryTexts.push_back(slotText);
+    }
+}
+
+void GamePlayState::updateInventoryDisplay() {
+    // Skip the title text (first element)
+    const auto& inventory = player->GetInventory();
+    for (size_t i = 0; i < 4; ++i) {
+        std::string displayText = std::to_string(i + 1) + ".";
+        if (i < inventory.size()) {
+            const auto& item = inventory[i];
+            displayText += " " + item->GetName();
+            if (item == player->GetEquippedWeapon()) {
+                displayText += " (E)";
+            }
+        }
+        inventoryTexts[i + 1].setString(displayText);  // +1 to skip title
+    }
+}
+
+void GamePlayState::checkForItems() {
+    if (showingItemPrompt) return; // Don't check for items if we're already showing a prompt
+
+    auto item = gameMap->GetItemAtPosition(player->GetX(), player->GetY());
+    if (item) {
+        currentItem = item;
+        showingItemPrompt = true;
+        std::stringstream ss;
+        ss << "You found: " << item->GetName() << "\n" << item->GetDescription() << "\n";
+        ss << "Press 'P' to pick up or 'L' to leave";
+        addCombatLogMessage(ss.str());
+    }
+}
+
+void GamePlayState::handleItemPickup() {
+    if (!currentItem || !showingItemPrompt) return;
+
+    // Try to add item to inventory
+    if (player->AddItem(currentItem)) {
+        // Successfully added to inventory, remove from map
+        gameMap->RemoveItemAtPosition(player->GetX(), player->GetY());
+        addCombatLogMessage("Picked up " + currentItem->GetName() + ".");
+        showingItemPrompt = false;
+        currentItem = nullptr;
+    } else {
+        addCombatLogMessage("Inventory is full!");
+    }
+}
+
+void GamePlayState::handleItemUse(int index) {
+    const auto& inventory = player->GetInventory();
+    if (index < 0 || static_cast<size_t>(index) >= inventory.size()) return;
+
+    auto item = inventory[index];
+    std::stringstream ss;
+
+    switch (item->GetType()) {
+        case ItemType::POTION:
+            if (item->GetName().find("Health") != std::string::npos) {
+                int healAmount = item->GetEffectValue();
+                int oldHealth = player->GetHealth();
+                int maxHeal = player->GetMaxHealth() - oldHealth;
+                int actualHeal = std::min(healAmount, maxHeal);
+                
+                if (actualHeal > 0) {
+                    player->TakeDamage(-healAmount); // Negative damage = healing
+                    ss << "Used " << item->GetName() << ". Healed for " << actualHeal << " HP";
+                    ss << "\nHP: " << player->GetHealth() << "/" << player->GetMaxHealth();
+                    player->RemoveItem(index);
+                } else {
+                    ss << "You are already at full health!";
+                }
+            } else {
+                // Handle other potion effects
+                ss << "Used " << item->GetName() << ". Effect: " << item->GetDescription();
+                player->RemoveItem(index);
+            }
+            break;
+
+        case ItemType::WEAPON:
+            player->EquipWeapon(index);
+            ss << "Equipped " << item->GetName();
+            ss << "\nNew Attack Power: " << player->GetTotalAttack();
+            break;
+
+        case ItemType::OBJECT:
+            // Handle object effects based on type
+            switch (item->GetObjectEffect()) {
+                case ObjectEffect::REVEAL_BOSS:
+                    bossRevealed = true;
+                    ss << "Used " << item->GetName() << ". The boss location is now revealed!";
+                    break;
+                case ObjectEffect::REVEAL_ITEMS:
+                    itemsRevealed = true;
+                    ss << "Used " << item->GetName() << ". All items are now revealed!";
+                    break;
+                case ObjectEffect::REVEAL_MONSTERS:
+                    monstersRevealed = true;
+                    ss << "Used " << item->GetName() << ". All monsters are now revealed!";
+                    break;
+            }
+            player->RemoveItem(index);
+            break;
+    }
+
+    CombatLogger::log(ss.str());
+    updateInventoryDisplay();
+    updateStatsText();
+
+    // If in combat, show combat options again after using item
+    if (combatState == CombatState::PLAYER_TURN) {
+        CombatLogger::log("\nYour turn! Choose your action:");
+        CombatLogger::log("A. Attack");
+        CombatLogger::log("E. Try to escape");
+        CombatLogger::log("I. Use Item/Change Weapon");
+    }
+}
+
+void GamePlayState::displayInventoryInLog() {
+    const auto& inventory = player->GetInventory();
+    for (size_t i = 0; i < 4; ++i) {
+        std::string displayText = std::to_string(i + 1) + ".";
+        if (i < inventory.size()) {
+            const auto& item = inventory[i];
+            displayText += " " + item->GetName();
+            if (item == player->GetEquippedWeapon()) {
+                displayText += " (E)";
+            }
+            displayText += " - " + item->GetDescription();
+        } else {
+            displayText += " Empty";
+        }
+        CombatLogger::log(displayText);
+    }
 }
 
 void GamePlayState::draw(sf::RenderWindow& window) {
@@ -580,8 +858,48 @@ void GamePlayState::draw(sf::RenderWindow& window) {
     window.draw(diceShape);
     window.draw(diceText);
 
+    // Draw inventory
+    window.draw(inventoryBox);
+    for (const auto& text : inventoryTexts) {
+        window.draw(text);
+    }
+
     // Draw right column (game map)
     drawGrid(window);
+
+    // Draw current enemy info if in combat
+    if (currentEnemy && combatState != CombatState::NOT_IN_COMBAT) {
+        // Create enemy info box below the map
+        const float leftColumnWidth = 400.0f;
+        const float mapSize = 15 * 40.0f; // gridSize * cellSize
+        const float offsetX = leftColumnWidth + ((window.getSize().x - leftColumnWidth) - mapSize) / 2;
+        const float offsetY = (window.getSize().y - mapSize) / 2 - 50; // Match the map's new position
+        const float infoBoxY = offsetY + mapSize + 20; // Position below map with padding
+
+        sf::RectangleShape enemyInfoBox;
+        enemyInfoBox.setSize(sf::Vector2f(mapSize, 100));
+        enemyInfoBox.setPosition(offsetX, infoBoxY);
+        enemyInfoBox.setFillColor(sf::Color(60, 60, 60));
+        enemyInfoBox.setOutlineColor(sf::Color(200, 200, 200));
+        enemyInfoBox.setOutlineThickness(2);
+        window.draw(enemyInfoBox);
+
+        // Create enemy stats text
+        sf::Text enemyStatsText;
+        enemyStatsText.setFont(font);
+        enemyStatsText.setCharacterSize(14);
+        enemyStatsText.setFillColor(sf::Color::White);
+        enemyStatsText.setPosition(offsetX + 10, infoBoxY + 10);
+
+        std::stringstream ss;
+        ss << "Enemy: " << currentEnemy->GetName() << (currentEnemy->GetBoss() ? " (BOSS)" : "") << "\n"
+           << "HP: " << currentEnemy->GetHealth() << "/" << currentEnemy->GetMaxHealth() << "\n"
+           << "Attack: " << currentEnemy->GetAttack() << "\n"
+           << "Defense: " << currentEnemy->GetDefense() << "\n"
+           << "Speed: " << currentEnemy->GetSpeed();
+        enemyStatsText.setString(ss.str());
+        window.draw(enemyStatsText);
+    }
 
     // Draw game over/victory screen if needed
     if (gameOver) {
@@ -616,7 +934,7 @@ void GamePlayState::drawGrid(sf::RenderWindow& window) {
     const int gridSize = 15;
     const float leftColumnWidth = 400.0f;
     const float offsetX = leftColumnWidth + ((window.getSize().x - leftColumnWidth) - gridSize * cellSize) / 2;
-    const float offsetY = (window.getSize().y - gridSize * cellSize) / 2;
+    const float offsetY = (window.getSize().y - gridSize * cellSize) / 2 - 50;
 
     // Draw grid lines
     for (int i = 0; i <= gridSize; ++i) {
@@ -630,8 +948,64 @@ void GamePlayState::drawGrid(sf::RenderWindow& window) {
         window.draw(line);
     }
 
-    // Draw player
-    playerShape.setPosition(offsetX + player->GetX() * cellSize, 
-                          offsetY + player->GetY() * cellSize);
-    window.draw(playerShape);
+    // Draw visible cells and markers
+    for (int y = 0; y < gridSize; ++y) {
+        for (int x = 0; x < gridSize; ++x) {
+            bool isVisible = false;
+            // Check if cell is within visibility range (3 cells from player) or revealed by items
+            int dx = abs(x - player->GetX());
+            int dy = abs(y - player->GetY());
+            if (dx <= 3 && dy <= 3) {
+                isVisible = true;
+            }
+
+            // Check what's in the cell
+            Character* enemy = gameMap->GetCharacterAt(x, y);
+            std::shared_ptr<Item> item = gameMap->GetItemAtPosition(x, y);
+            
+            // Draw items if visible or revealed
+            if ((isVisible || itemsRevealed) && item) {
+                // Draw yellow diamond for items
+                sf::RectangleShape marker(sf::Vector2f(12, 12));
+                marker.setFillColor(sf::Color(255, 215, 0, isVisible ? 200 : 100)); // More transparent if revealed
+                marker.setPosition(offsetX + x * cellSize + cellSize/2 - 6, 
+                                offsetY + y * cellSize + cellSize/2 - 6);
+                marker.setRotation(45); // Rotate to make it diamond-shaped
+                window.draw(marker);
+            }
+
+            // Draw enemies if visible or revealed
+            if (enemy && enemy != player.get()) {
+                bool shouldDrawEnemy = isVisible || 
+                                     (enemy->GetBoss() && bossRevealed) || 
+                                     (!enemy->GetBoss() && monstersRevealed);
+                
+                if (shouldDrawEnemy) {
+                    if (enemy->GetBoss()) {
+                        // Draw larger red diamond for bosses
+                        sf::RectangleShape marker(sf::Vector2f(14, 14));
+                        marker.setFillColor(sf::Color(255, 0, 0, isVisible ? 200 : 100));
+                        marker.setPosition(offsetX + x * cellSize + cellSize/2 - 7,
+                                        offsetY + y * cellSize + cellSize/2 - 7);
+                        marker.setRotation(45);
+                        window.draw(marker);
+                    } else {
+                        // Draw red circle for regular enemies
+                        sf::CircleShape marker(6);
+                        marker.setFillColor(sf::Color(255, 0, 0, isVisible ? 200 : 100));
+                        marker.setPosition(offsetX + x * cellSize + cellSize/2 - 6,
+                                        offsetY + y * cellSize + cellSize/2 - 6);
+                        window.draw(marker);
+                    }
+                }
+            }
+        }
+    }
+
+    // Draw player position
+    sf::CircleShape playerMarker(6);
+    playerMarker.setFillColor(sf::Color::Blue);
+    playerMarker.setPosition(offsetX + player->GetX() * cellSize + cellSize/2 - 6,
+                           offsetY + player->GetY() * cellSize + cellSize/2 - 6);
+    window.draw(playerMarker);
 } 

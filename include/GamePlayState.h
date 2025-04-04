@@ -10,6 +10,7 @@
 #include <functional>
 #include <sstream>
 
+
 // Forward declarations of the original game classes
 class Character;
 class Map;
@@ -39,6 +40,14 @@ private:
     int selectedCharacter;
     std::string playerName;
     bool gameOver;
+    int currentDiceValue;
+    float diceAnimationTime;
+    bool isRollingDice;
+    bool showingItemPrompt;
+    std::shared_ptr<Item> currentItem;
+    bool bossRevealed;
+    bool itemsRevealed;
+    bool monstersRevealed;
 
     // Graphics-related members
     sf::Font font;
@@ -53,6 +62,15 @@ private:
     sf::Texture classIcon;
     sf::Sprite iconSprite;
     
+    // Dice-related members
+    sf::RectangleShape diceShape;
+    sf::Text diceText;
+    
+    // Inventory-related members
+    sf::RectangleShape inventoryBox;
+    std::vector<sf::Text> inventoryTexts;
+    std::vector<sf::RectangleShape> inventorySlots;
+    
     // Combat log elements
     sf::RectangleShape combatLogBackground;
     std::deque<std::string> combatLog;
@@ -60,13 +78,6 @@ private:
     std::vector<sf::RectangleShape> combatLogBackgrounds;
     static const size_t MAX_LOG_LINES = 25;
 
-    // Dice related members
-    sf::RectangleShape diceShape;
-    sf::Text diceText;
-    int currentDiceValue;
-    float diceAnimationTime;
-    bool isRollingDice;
-    
     // Methods
     void initializeStats();
     void updateStatsText();
@@ -79,6 +90,14 @@ private:
     void handlePlayerEscape();
     void addCombatLogMessage(const std::string& message);
     void loadClassIcon(int selectedCharacter);
+    
+    // Inventory-related methods
+    void initializeInventoryUI();
+    void updateInventoryDisplay();
+    void handleItemPickup();
+    void handleItemUse(int index);
+    void checkForItems();
+    void displayInventoryInLog();
     
     // Dice related methods
     void startDiceRoll();

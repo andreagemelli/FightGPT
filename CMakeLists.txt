@@ -16,6 +16,7 @@ add_executable(FightGPT
     src/main.cpp
     src/NameInputState.cpp
     src/CharacterSelectionState.cpp
+    src/StoryState.cpp
     src/GamePlayState.cpp
     src/GameLogic.cpp
 )

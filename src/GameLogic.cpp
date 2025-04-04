@@ -5,6 +5,15 @@
 #include <random>
 
 int Character::TakeDamage(int damage) {
+    // If this is healing (negative damage)
+    if (damage < 0) {
+        int healAmount = -damage; // Convert to positive
+        int oldHealth = health;
+        health = std::min(maxHealth, health + healAmount); // Can't heal beyond max health
+        return health - oldHealth; // Return actual amount healed
+    }
+
+    // Normal damage handling
     if (rand() % 100 < avoidance) {
         Logger::info(name + " avoided the attack!");
         return 0;
@@ -110,10 +119,13 @@ void Battle::Reward(Character& winner, Character& loser) {
 }
 
 Map::Map(int width, int height)
-    : width(width), height(height), grid(width, std::vector<Character*>(height)),
+    : width(width), height(height), 
+      grid(width, std::vector<Character*>(height)),
+      item_grid(width, std::vector<std::shared_ptr<Item>>(height)),
       rng(std::random_device()()) {
     PopulateMonsters(5);
     PopulateBoss();
+    PopulateItems(8); // Add some items to the map
 }
 
 void Map::PlaceCharacter(Character& character) {
@@ -167,7 +179,7 @@ void Map::MoveCharacter(Character& character, int dx, int dy) {
 
 void Map::PopulateMonsters(int n) {
     for (int i = 0; i < n; i++) {
-        std::string name = "Monster " + std::to_string(i);
+        std::string name = "Monster lvl" + std::to_string(i);
         // Monsters get progressively stronger
         float difficultyMult = 1.0f + (i * 0.2f);  // Each monster is 20% stronger than the last
         
@@ -239,4 +251,70 @@ Character* Map::CheckNewPosition(Character& mainCharacter, int dx, int dy) {
         return grid[newX][newY];
     }
     return nullptr;
+}
+
+std::shared_ptr<Item> Map::GetItemAtPosition(int x, int y) const {
+    if (x >= 0 && x < width && y >= 0 && y < height) {
+        return item_grid[x][y];
+    }
+    return nullptr;
+}
+
+void Map::RemoveItemAtPosition(int x, int y) {
+    if (x >= 0 && x < width && y >= 0 && y < height) {
+        item_grid[x][y] = nullptr;
+    }
+}
+
+void Map::PlaceItem(std::shared_ptr<Item> item) {
+    std::uniform_int_distribution<int> distX(0, width - 1);
+    std::uniform_int_distribution<int> distY(0, height - 1);
+    int x = distX(rng);
+    int y = distY(rng);
+
+    while (grid[x][y] != nullptr || item_grid[x][y] != nullptr) {
+        x = distX(rng);
+        y = distY(rng);
+    }
+
+    item_grid[x][y] = item;
+    Logger::info("Placed item " + item->GetName() + " at position (" + 
+                std::to_string(x) + ", " + std::to_string(y) + ")");
+}
+
+std::vector<std::shared_ptr<Item>> Map::CreateRandomItems(int count) {
+    std::vector<std::shared_ptr<Item>> items;
+    
+    // Define possible items
+    std::vector<std::shared_ptr<Item>> possibleItems = {
+        // Potions
+        std::make_shared<Item>("Health Potion", "Restores 30 HP", ItemType::POTION, 30),
+        std::make_shared<Item>("Greater Health Potion", "Restores 50 HP", ItemType::POTION, 50),
+        std::make_shared<Item>("Strength Potion", "Temporarily increases attack by 10", ItemType::POTION, 10),
+        
+        // Weapons
+        std::make_shared<Item>("Sharp Sword", "Increases attack by 15", ItemType::WEAPON, 15),
+        std::make_shared<Item>("Battle Axe", "Increases attack by 20", ItemType::WEAPON, 20),
+        std::make_shared<Item>("Legendary Blade", "Increases attack by 30", ItemType::WEAPON, 30),
+        
+        // Objects
+        std::make_shared<Item>("Boss Compass", "Reveals the boss location", ItemType::OBJECT, 0, ObjectEffect::REVEAL_BOSS),
+        std::make_shared<Item>("Monster Radar", "Reveals all monsters", ItemType::OBJECT, 0, ObjectEffect::REVEAL_MONSTERS),
+        std::make_shared<Item>("Treasure Map", "Reveals all items", ItemType::OBJECT, 0, ObjectEffect::REVEAL_ITEMS)
+    };
+
+    // Randomly select items
+    std::uniform_int_distribution<int> dist(0, possibleItems.size() - 1);
+    for (int i = 0; i < count; ++i) {
+        items.push_back(possibleItems[dist(rng)]);
+    }
+
+    return items;
+}
+
+void Map::PopulateItems(int n) {
+    auto items = CreateRandomItems(n);
+    for (auto& item : items) {
+        PlaceItem(item);
+    }
 } 

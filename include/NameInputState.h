@@ -14,14 +14,21 @@ public:
     void draw(sf::RenderWindow& window) override;
 
 private:
-    void updateText();
-
+    static const size_t MAX_NAME_LENGTH = 20;
+    
+    // Window dimensions
+    const int windowWidth;
+    const int windowHeight;
+    
+    // Member variables
     sf::Font font;
+    sf::Texture logoTexture;
+    sf::Sprite logoSprite;
     sf::Text titleText;
     sf::Text inputText;
     sf::Text instructionText;
     sf::RectangleShape inputBox;
-    
     std::string playerName;
-    static const size_t MAX_NAME_LENGTH = 20;
+
+    void updateText();
 }; 

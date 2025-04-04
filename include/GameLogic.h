@@ -5,6 +5,37 @@
 #include <random>
 #include <memory>
 
+enum class ItemType {
+    POTION,
+    WEAPON,
+    OBJECT
+};
+
+enum class ObjectEffect {
+    REVEAL_BOSS,
+    REVEAL_ITEMS,
+    REVEAL_MONSTERS
+};
+
+class Item {
+private:
+    std::string name;
+    std::string description;
+    ItemType type;
+    int effect_value;
+    ObjectEffect object_effect;
+
+public:
+    Item(const std::string& name, const std::string& description, ItemType type, int effect_value = 0, ObjectEffect object_effect = ObjectEffect::REVEAL_BOSS)
+        : name(name), description(description), type(type), effect_value(effect_value), object_effect(object_effect) {}
+
+    std::string GetName() const { return name; }
+    std::string GetDescription() const { return description; }
+    ItemType GetType() const { return type; }
+    int GetEffectValue() const { return effect_value; }
+    ObjectEffect GetObjectEffect() const { return object_effect; }
+};
+
 class Character {
 protected:
     std::string name;
@@ -20,6 +51,9 @@ protected:
     int y;
     bool boss;
     bool isWounded;
+    std::vector<std::shared_ptr<Item>> inventory;
+    std::shared_ptr<Item> equipped_weapon;
+    static const int MAX_INVENTORY_SIZE = 4;
 
 public:
     Character() {}
@@ -78,6 +112,46 @@ public:
             LevelUp(exp);
         }
     }
+
+    // New inventory methods
+    bool AddItem(std::shared_ptr<Item> item) {
+        if (inventory.size() < MAX_INVENTORY_SIZE) {
+            inventory.push_back(item);
+            return true;
+        }
+        return false;
+    }
+
+    bool RemoveItem(int index) {
+        if (index >= 0 && static_cast<size_t>(index) < inventory.size()) {
+            inventory.erase(inventory.begin() + index);
+            return true;
+        }
+        return false;
+    }
+
+    const std::vector<std::shared_ptr<Item>>& GetInventory() const {
+        return inventory;
+    }
+
+    void EquipWeapon(int index) {
+        if (index >= 0 && static_cast<size_t>(index) < inventory.size() && 
+            inventory[index]->GetType() == ItemType::WEAPON) {
+            equipped_weapon = inventory[index];
+        }
+    }
+
+    std::shared_ptr<Item> GetEquippedWeapon() const {
+        return equipped_weapon;
+    }
+
+    int GetTotalAttack() const {
+        int total = attack;
+        if (equipped_weapon) {
+            total += equipped_weapon->GetEffectValue();
+        }
+        return total;
+    }
 };
 
 class Battle {
@@ -91,6 +165,7 @@ private:
     int width;
     int height;
     std::vector<std::vector<Character*>> grid;
+    std::vector<std::vector<std::shared_ptr<Item>>> item_grid;
     std::mt19937 rng;
 
 public:
@@ -99,8 +174,14 @@ public:
     void MoveCharacter(Character& character, int dx, int dy);
     void PopulateMonsters(int n);
     void PopulateBoss();
+    void PopulateItems(int n);
     std::string GenerateRandomName();
     int GenerateRandomStat(int min, int max);
     void RemoveEnemy(Character& enemy, int dx, int dy);
     Character* CheckNewPosition(Character& mainCharacter, int dx, int dy);
+    std::shared_ptr<Item> GetItemAtPosition(int x, int y) const;
+    void RemoveItemAtPosition(int x, int y);
+    void PlaceItem(std::shared_ptr<Item> item);
+    std::vector<std::shared_ptr<Item>> CreateRandomItems(int count);
+    Character* GetCharacterAt(int x, int y) const { return grid[x][y]; }
 }; 
