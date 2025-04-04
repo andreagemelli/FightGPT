@@ -14,6 +14,7 @@ find_package(SFML 2.6 COMPONENTS graphics window system REQUIRED)
 # Add source files
 add_executable(FightGPT
     src/main.cpp
+    src/NameInputState.cpp
     src/CharacterSelectionState.cpp
     src/GamePlayState.cpp
     src/GameLogic.cpp
@@ -30,4 +31,11 @@ target_include_directories(FightGPT
 target_link_libraries(FightGPT sfml-graphics sfml-window sfml-system)
 
 # Copy assets to build directory
-file(COPY assets DESTINATION ${CMAKE_BINARY_DIR}) 
+file(COPY assets DESTINATION ${CMAKE_BINARY_DIR})
+
+# Enable warnings and treat them as errors
+if(MSVC)
+    target_compile_options(FightGPT PRIVATE /W4)
+else()
+    target_compile_options(FightGPT PRIVATE -Wall -Wextra)
+endif() 

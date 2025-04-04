@@ -4,36 +4,36 @@
 #include <sstream>
 #include <random>
 
-void Character::TakeDamage(int damage) {
+int Character::TakeDamage(int damage) {
     if (rand() % 100 < avoidance) {
         Logger::info(name + " avoided the attack!");
-        return;
+        return 0;
     }
 
-    int damageTaken = damage / (defense + 1);
+    // New damage calculation formula with some randomness
+    float defenseReduction = static_cast<float>(defense) / (defense + 50);  // Defense has diminishing returns
+    float damageMultiplier = (rand() % 30 + 85) / 100.0f;  // Random damage between 85% and 115%
+    int damageTaken = static_cast<int>(damage * (1.0f - defenseReduction) * damageMultiplier);
+    damageTaken = std::max(1, damageTaken);  // Always deal at least 1 damage
+    
     health -= damageTaken;
+    health = std::max(0, health);  // Don't go below 0
     
     std::stringstream ss;
     ss << name << " took " << damageTaken << " damage. Health: " << health;
     Logger::info(ss.str());
+    
+    return damageTaken;
 }
 
 void Character::LevelUp(int exp) {
-    experience += exp;
-
-    while (experience >= 10 * (level + 1)) {
-        level++;
-        health *= 1.1;
-        maxHealth = health;
-        attack *= 1.1;
-        defense *= 1.1;
-        speed *= 1.1;
-        avoidance *= 1.1;
-    }
-
-    std::stringstream ss;
-    ss << "Gained " << exp << " exp and reached lvl " << level;
-    Logger::info(ss.str());
+    level++;
+    maxHealth = static_cast<int>(maxHealth * 1.2f);  // 20% increase
+    health = maxHealth;
+    attack = static_cast<int>(attack * 1.15f);       // 15% increase
+    defense = static_cast<int>(defense * 1.15f);     // 15% increase
+    speed = static_cast<int>(speed * 1.1f);          // 10% increase
+    avoidance = std::min(40, static_cast<int>(avoidance * 1.1f)); // 10% increase, capped at 40%
 }
 
 void Character::PrintStats() const {
@@ -51,29 +51,62 @@ void Character::PrintStats() const {
 }
 
 bool Battle::Fight(Character& character1, Character& character2) {
-    Logger::info("Battle started between " + character1.GetName() + " and " + character2.GetName());
+    Logger::info("\n=== BATTLE START ===");
+    Logger::info(character1.GetName() + " (HP: " + std::to_string(character1.GetHealth()) + ") VS " + 
+                character2.GetName() + " (HP: " + std::to_string(character2.GetHealth()) + ")");
     
-    while (!character1.IsDefeated() && !character2.IsDefeated()) {
-        if (character1.GetSpeed() > character2.GetSpeed()) {
-            character2.TakeDamage(character1.GetAttack());
-            if (character2.IsDefeated()) break;
-            character1.TakeDamage(character2.GetAttack());
+    bool playerTurn = character1.GetSpeed() > character2.GetSpeed();
+    bool battleEnded = false;
+    bool escaped = false;
+
+    while (!battleEnded) {
+        if (playerTurn) {
+            Logger::info("\nYour turn! Choose your action:");
+            Logger::info("1. Attack");
+            Logger::info("2. Try to escape");
+            
+            // Wait for input (this will be handled by the game state)
+            // For now, always attack
+            int damage = character1.GetAttack();
+            character2.TakeDamage(damage);
+            
+            Logger::info("\n" + character1.GetName() + " attacks " + character2.GetName() + "!");
+            Logger::info("Enemy HP: " + std::to_string(character2.GetHealth()) + "/" + 
+                        std::to_string(character2.GetMaxHealth()));
+            
+            if (character2.IsDefeated()) {
+                battleEnded = true;
+                break;
+            }
         } else {
-            character1.TakeDamage(character2.GetAttack());
-            if (character1.IsDefeated()) break;
-            character2.TakeDamage(character1.GetAttack());
+            // Enemy turn
+            Logger::info("\nEnemy's turn!");
+            int damage = character2.GetAttack();
+            character1.TakeDamage(damage);
+            
+            Logger::info(character2.GetName() + " attacks " + character1.GetName() + "!");
+            Logger::info("Your HP: " + std::to_string(character1.GetHealth()) + "/" + 
+                        std::to_string(character1.GetMaxHealth()));
+            
+            if (character1.IsDefeated()) {
+                battleEnded = true;
+                break;
+            }
         }
+        playerTurn = !playerTurn;
     }
 
     bool result = !character1.IsDefeated();
-    Logger::info("Battle ended. Winner: " + (result ? character1.GetName() : character2.GetName()));
+    Logger::info("\n=== BATTLE " + std::string(result ? "WON!" : "LOST!") + " ===\n");
     return result;
 }
 
 void Battle::Reward(Character& winner, Character& loser) {
-    int exp = loser.GetLevel() * 10;
-    winner.LevelUp(exp);
-    Logger::info(winner.GetName() + " gained " + std::to_string(exp) + " experience");
+    int exp = loser.GetLevel() * 5;  // Base experience from defeated enemy
+    if (loser.GetBoss()) {
+        exp *= 2;  // Double experience for defeating a boss
+    }
+    winner.AddExperience(exp);  // Use AddExperience instead of direct LevelUp call
 }
 
 Map::Map(int width, int height)
@@ -135,25 +168,32 @@ void Map::MoveCharacter(Character& character, int dx, int dy) {
 void Map::PopulateMonsters(int n) {
     for (int i = 0; i < n; i++) {
         std::string name = "Monster " + std::to_string(i);
-        int health = GenerateRandomStat(i, 100);
-        int attack = GenerateRandomStat(i, 50);
-        int defence = GenerateRandomStat(i, 15);
-        int speed = GenerateRandomStat(i, 20);
-        int avoidance = GenerateRandomStat(i, 15);
+        // Monsters get progressively stronger
+        float difficultyMult = 1.0f + (i * 0.2f);  // Each monster is 20% stronger than the last
+        
+        int health = static_cast<int>(80 * difficultyMult);
+        int attack = static_cast<int>(25 * difficultyMult);
+        int defence = static_cast<int>(15 * difficultyMult);
+        int speed = static_cast<int>(15 * difficultyMult);
+        int avoidance = static_cast<int>(10 * difficultyMult);
+        
         Character* monster = new Character(name, health, attack, defence, speed, avoidance);
-        monster->SetLevel(i);
+        monster->SetLevel(i + 1);
         PlaceCharacter(*monster);
     }
 }
 
 void Map::PopulateBoss() {
     std::string name = GenerateRandomName();
-    int health = GenerateRandomStat(50, 100);
-    int attack = GenerateRandomStat(20, 50);
-    int defence = GenerateRandomStat(15, 15);
-    int speed = GenerateRandomStat(5, 20);
-    int avoidance = GenerateRandomStat(5, 15);
-    Character* boss = new Character(name, attack, health, defence, speed, avoidance);
+    // Boss is significantly stronger
+    int health = 200;
+    int attack = 45;
+    int defence = 25;
+    int speed = 20;
+    int avoidance = 15;
+    
+    Character* boss = new Character(name, health, attack, defence, speed, avoidance);
+    boss->SetLevel(5);
     boss->SetBoss();
     PlaceCharacter(*boss);
 }
@@ -173,14 +213,26 @@ int Map::GenerateRandomStat(int min, int max) {
     return min + (rand() % (max - min + 1));
 }
 
-void Map::RemoveEnemy(Character& enemy, int dx, int dy) {
-    grid[enemy.GetX()][enemy.GetY()] = nullptr;
-    Logger::info("Removed " + enemy.GetName() + " from the map");
+void Map::RemoveEnemy(Character& enemy, int /*dx*/, int /*dy*/) {
+    // Find and remove the enemy from the grid
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            if (grid[y][x] == &enemy) {
+                grid[y][x] = nullptr;
+                return;
+            }
+        }
+    }
 }
 
 Character* Map::CheckNewPosition(Character& mainCharacter, int dx, int dy) {
     int newX = mainCharacter.GetX() + dx;
     int newY = mainCharacter.GetY() + dy;
+    
+    // Check boundaries
+    if (newX < 0 || newX >= width || newY < 0 || newY >= height) {
+        return nullptr;
+    }
     
     if (grid[newX][newY] != nullptr) {
         Logger::info("Found enemy: " + grid[newX][newY]->GetName());

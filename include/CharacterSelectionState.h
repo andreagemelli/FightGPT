@@ -3,10 +3,11 @@
 #include "GameState.h"
 #include <SFML/Graphics.hpp>
 #include <array>
+#include <string>
 
 class CharacterSelectionState : public GameState {
 public:
-    CharacterSelectionState();
+    CharacterSelectionState(const std::string& playerName);
     ~CharacterSelectionState() override = default;
 
     void handleEvent(const sf::Event& event, sf::RenderWindow& window) override;
@@ -25,6 +26,7 @@ private:
     std::array<sf::Sprite, 3> iconSprites;
     sf::RectangleShape background;
     int selectedOption;
+    std::string playerName;
     
     void initializeText();
     void initializeBoxes();

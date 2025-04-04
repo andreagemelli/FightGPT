@@ -3,18 +3,20 @@
 #include <string>
 #include <memory>
 #include "GameState.h"
+#include "NameInputState.h"
 #include "CharacterSelectionState.h"
+#include "GamePlayState.h"
 #include "Logger.h"
 
 int main() {
     Logger::info("Starting FightGPT");
     
-    // Create the main window
-    sf::RenderWindow window(sf::VideoMode(800, 600), "FightGPT");
+    // Create the main window with larger size
+    sf::RenderWindow window(sf::VideoMode(1200, 800), "FightGPT");
     window.setVerticalSyncEnabled(true);
 
-    // Create the game state manager
-    std::unique_ptr<GameState> currentState = std::make_unique<CharacterSelectionState>();
+    // Create the game state manager starting with name input
+    std::unique_ptr<GameState> currentState = std::make_unique<NameInputState>();
     sf::Clock clock;
 
     // Main game loop

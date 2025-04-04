@@ -19,16 +19,31 @@ protected:
     int x;
     int y;
     bool boss;
+    bool isWounded;
 
 public:
     Character() {}
 
-    Character(std::string name, int health, int attack, int defense, int speed, int avoidance)
-        : name(name), health(health), maxHealth(health), attack(attack), defense(defense),
-          speed(speed), avoidance(avoidance), level(1), experience(0), x(0), y(0), boss(false) {}
+    Character(const std::string& name, int health, int attack, int defense, int speed, int avoidance)
+        : name(name), 
+          health(health), 
+          maxHealth(health), 
+          attack(attack), 
+          defense(defense),
+          speed(speed), 
+          avoidance(avoidance), 
+          level(1),
+          experience(0),
+          x(0), 
+          y(0),
+          boss(false),
+          isWounded(false) {}
 
-    virtual void TakeDamage(int damage);
-    void LevelUp(int exp);
+    virtual ~Character() = default;
+
+    // Returns actual damage dealt, or 0 if avoided
+    virtual int TakeDamage(int damage);
+    void LevelUp(int exp = 0);
     void ResetHealth() { health = maxHealth; }
     bool IsDefeated() { return health <= 0; }
     void PrintStats() const;
@@ -49,6 +64,20 @@ public:
     int GetDefense() { return defense; }
     int GetExperience() const { return experience; }
     int GetAvoidance() const { return avoidance; }
+    bool IsWounded() const { return isWounded; }
+    void SetWounded(bool wounded) { isWounded = wounded; }
+    void ApplyBleedDamage() {
+        if (isWounded) {
+            health = std::max(1, health - 5);
+        }
+    }
+
+    void AddExperience(int exp) {
+        experience += exp;
+        while (experience >= level * 10) {
+            LevelUp(exp);
+        }
+    }
 };
 
 class Battle {

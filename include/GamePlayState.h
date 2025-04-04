@@ -7,6 +7,8 @@
 #include <memory>
 #include <vector>
 #include <deque>
+#include <functional>
+#include <sstream>
 
 // Forward declarations of the original game classes
 class Character;
@@ -14,7 +16,7 @@ class Map;
 
 class GamePlayState : public GameState {
 public:
-    GamePlayState(int selectedCharacter);
+    GamePlayState(int selectedCharacter, const std::string& playerName);
     ~GamePlayState() override = default;
 
     void handleEvent(const sf::Event& event, sf::RenderWindow& window) override;
@@ -22,24 +24,32 @@ public:
     void draw(sf::RenderWindow& window) override;
 
 private:
-    void initializeStats();
-    void updateStatsText();
-    void updateEnemyDisplays();
-    void drawGrid(sf::RenderWindow& window);
-    void handleCombat(Character* enemy);
-    void addCombatLogMessage(const std::string& message);
-    void loadClassIcon(int selectedCharacter);
+    enum class CombatState {
+        NOT_IN_COMBAT,
+        PLAYER_TURN,
+        ENEMY_TURN,
+        TRYING_ESCAPE
+    };
 
+    // Member variables (ordered to match initialization)
     std::unique_ptr<Character> player;
     std::unique_ptr<Map> gameMap;
-    std::unique_ptr<Battle> battle;
+    Character* currentEnemy;
+    CombatState combatState;
+    int selectedCharacter;
+    std::string playerName;
+    bool gameOver;
 
+    // Graphics-related members
     sf::Font font;
+    sf::Text characterNameText;
     sf::Text statsText;
     sf::Text enemyText;
     sf::RectangleShape playerShape;
     sf::RectangleShape healthBar;
     sf::RectangleShape healthBarBackground;
+    sf::RectangleShape characterInfoBox;
+    sf::RectangleShape combatLogBox;
     sf::Texture classIcon;
     sf::Sprite iconSprite;
     
@@ -47,8 +57,34 @@ private:
     sf::RectangleShape combatLogBackground;
     std::deque<std::string> combatLog;
     std::vector<sf::Text> combatLogTexts;
-    static const size_t MAX_LOG_LINES = 10;
+    std::vector<sf::RectangleShape> combatLogBackgrounds;
+    static const size_t MAX_LOG_LINES = 25;
 
-    int selectedCharacter;
-    bool gameOver;
+    // Dice related members
+    sf::RectangleShape diceShape;
+    sf::Text diceText;
+    int currentDiceValue;
+    float diceAnimationTime;
+    bool isRollingDice;
+    
+    // Methods
+    void initializeStats();
+    void updateStatsText();
+    void updateEnemyDisplays();
+    void drawGrid(sf::RenderWindow& window);
+    void handleCombat(Character* enemy);
+    void handleEnemyTurn(Character* enemy);
+    void handleVictory(Character& enemy);
+    void handlePlayerAttack();
+    void handlePlayerEscape();
+    void addCombatLogMessage(const std::string& message);
+    void loadClassIcon(int selectedCharacter);
+    
+    // Dice related methods
+    void startDiceRoll();
+    void updateDiceRoll(float deltaTime);
+    void updateDiceText();
+    void handleDiceResult(int roll, bool isAttack);
+    void performPlayerAttack(bool isCritical);
+    int rollD20() { return (rand() % 20) + 1; }
 }; 
