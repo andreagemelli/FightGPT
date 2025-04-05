@@ -243,6 +243,7 @@ private:
     int height;
     std::vector<std::vector<Character*>> grid;
     std::vector<std::vector<std::shared_ptr<Item>>> item_grid;
+    std::vector<std::vector<bool>> walls; // Grid to track walls
     std::mt19937 rng;
 
 public:
@@ -252,6 +253,8 @@ public:
     void PopulateMonsters(int n);
     void PopulateBoss();
     void PopulateItems(int n);
+    void PopulateWalls(int wallCount); // Generate random walls
+    void MoveMonsters(Character& player); // Move monsters after player's turn
     std::string GenerateRandomName();
     int GenerateRandomStat(int min, int max);
     void RemoveEnemy(Character& enemy, int dx, int dy);
@@ -261,4 +264,5 @@ public:
     void PlaceItem(std::shared_ptr<Item> item);
     std::vector<std::shared_ptr<Item>> CreateRandomItems(int count);
     Character* GetCharacterAt(int x, int y) const { return grid[x][y]; }
+    bool HasWall(int x, int y) const { return walls[x][y]; } // Check if position has a wall
 }; 

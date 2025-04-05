@@ -47,6 +47,43 @@ GamePlayState::GamePlayState(int selectedCharacter, const std::string& playerNam
         return;
     }
     
+    // Load prison background
+    if (!backgroundTexture.loadFromFile("assets/maps/prison.png")) {
+        Logger::error("Failed to load prison background!");
+        return;
+    }
+    backgroundSprite.setTexture(backgroundTexture);
+
+    // Load wall texture
+    if (!wallTexture.loadFromFile("assets/maps/wall.png")) {
+        Logger::error("Failed to load wall texture!");
+        return;
+    }
+    wallSprite.setTexture(wallTexture);
+    
+    // Load character image for the player
+    std::string characterPath;
+    switch (selectedCharacter) {
+        case 0: characterPath = "assets/characters/knight.png"; break; // Knight
+        case 1: characterPath = "assets/characters/mage.png"; break;   // Mage
+        case 2: characterPath = "assets/characters/archer.png"; break; // Archer
+        default: characterPath = "assets/characters/knight.png"; break;
+    }
+
+    if (!playerTexture.loadFromFile(characterPath)) {
+        Logger::error("Failed to load character image!");
+        return;
+    }
+    playerSprite.setTexture(playerTexture);
+    
+    // Scale the character image to fit within a 40x40 tile
+    float scaleX = 40.0f / playerTexture.getSize().x;
+    float scaleY = 40.0f / playerTexture.getSize().y;
+    playerSprite.setScale(scaleX, scaleY);
+
+    // Load class icon
+    loadClassIcon(selectedCharacter);
+
     // Initialize player shape
     playerShape.setSize(sf::Vector2f(30, 30));
     playerShape.setFillColor(sf::Color::Blue);
@@ -86,9 +123,6 @@ GamePlayState::GamePlayState(int selectedCharacter, const std::string& playerNam
     combatLogBackground.setSize(sf::Vector2f(leftColumnWidth - 4 * padding, combatLogHeight - 2 * padding));
     combatLogBackground.setFillColor(sf::Color(0, 0, 0, 200));
     combatLogBackground.setPosition(padding * 2, combatLogY + padding);
-
-    // Load class icon
-    loadClassIcon(selectedCharacter);
 
     // Initialize character name text
     characterNameText.setFont(font);
@@ -146,6 +180,33 @@ GamePlayState::GamePlayState(int selectedCharacter, const std::string& playerNam
     updateDiceText();
 
     initializeInventoryUI();
+
+    // Load monster texture
+    if (!monsterTexture.loadFromFile("assets/characters/monster.png")) {
+        Logger::error("Failed to load monster texture!");
+        return;
+    }
+    monsterSprite.setTexture(monsterTexture);
+    float monsterScale = 40.0f / std::max(monsterTexture.getSize().x, monsterTexture.getSize().y);
+    monsterSprite.setScale(monsterScale, monsterScale);
+    
+    // Load boss texture
+    if (!bossTexture.loadFromFile("assets/characters/boss.png")) {
+        Logger::error("Failed to load boss texture!");
+        return;
+    }
+    bossSprite.setTexture(bossTexture);
+    float bossScale = 40.0f / std::max(bossTexture.getSize().x, bossTexture.getSize().y);
+    bossSprite.setScale(bossScale, bossScale);
+    
+    // Load item texture
+    if (!itemTexture.loadFromFile("assets/characters/item.png")) {
+        Logger::error("Failed to load item texture!");
+        return;
+    }
+    itemSprite.setTexture(itemTexture);
+    float itemScale = 40.0f / std::max(itemTexture.getSize().x, itemTexture.getSize().y);
+    itemSprite.setScale(itemScale, itemScale);
 }
 
 void GamePlayState::loadClassIcon(int selectedCharacter) {
@@ -299,7 +360,7 @@ void GamePlayState::initializeStats() {
     CombatLogger::log(ss.str());
 }
 
-void GamePlayState::handleEvent(const sf::Event& event, sf::RenderWindow& /*window*/) {
+void GamePlayState::handleEvent(const sf::Event& event, sf::RenderWindow& window) {
     if (gameOver) {
         if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Return) {
             nextState = std::make_unique<CharacterSelectionState>("");  // Pass empty string to return to name screen
@@ -364,13 +425,15 @@ void GamePlayState::handleEvent(const sf::Event& event, sf::RenderWindow& /*wind
             Character* enemy = gameMap->CheckNewPosition(*player, dx, dy);
             if (enemy) {
                 handleCombat(enemy);
-            } else if (dx != 0 || dy != 0) {  // Only log movement if actually moving
+            } else if (dx != 0 || dy != 0) {  // Only move if actually moving
                 int newX = player->GetX() + dx;
                 int newY = player->GetY() + dy;
                 
-                // Check map boundaries
-                if (newX >= 0 && newX < 15 && newY >= 0 && newY < 15) {
+                // Check map boundaries and walls
+                if (newX >= 0 && newX < 15 && newY >= 0 && newY < 15 && !gameMap->HasWall(newX, newY)) {
                     gameMap->MoveCharacter(*player, dx, dy);
+                    // Move monsters after player's turn
+                    gameMap->MoveMonsters(*player);
                     std::stringstream ss;
                     ss << "\nMoved to position (" << player->GetX() << ", " << player->GetY() << ")";
                     CombatLogger::log(ss.str());
@@ -1080,7 +1143,7 @@ void GamePlayState::draw(sf::RenderWindow& window) {
         
         if (player->GetHealth() > 0) {
             // Victory screen
-            endText.setString("GAME WON!");
+            endText.setString("VICTORY!");
             endText.setFillColor(sf::Color(50, 255, 50));  // Bright green
             
             // Create subtitle text
@@ -1145,17 +1208,23 @@ void GamePlayState::drawGrid(sf::RenderWindow& window) {
     const float offsetX = leftColumnWidth + ((window.getSize().x - leftColumnWidth) - gridSize * cellSize) / 2;
     const float offsetY = (window.getSize().y - gridSize * cellSize) / 2 - 50;
 
-    // Draw grid lines
+    // Draw background first
+    drawBackground(window);
+
+    // Draw grid lines (fainter now that we have a background)
     for (int i = 0; i <= gridSize; ++i) {
-        sf::RectangleShape line(sf::Vector2f(gridSize * cellSize, 2));
+        sf::RectangleShape line(sf::Vector2f(gridSize * cellSize, 1));
         line.setPosition(offsetX, offsetY + i * cellSize);
-        line.setFillColor(sf::Color(100, 100, 100));
+        line.setFillColor(sf::Color(100, 100, 100, 128)); // Semi-transparent
         window.draw(line);
 
-        line.setSize(sf::Vector2f(2, gridSize * cellSize));
+        line.setSize(sf::Vector2f(1, gridSize * cellSize));
         line.setPosition(offsetX + i * cellSize, offsetY);
         window.draw(line);
     }
+
+    // Draw walls
+    drawWalls(window);
 
     // Draw visible cells and markers
     for (int y = 0; y < gridSize; ++y) {
@@ -1174,13 +1243,10 @@ void GamePlayState::drawGrid(sf::RenderWindow& window) {
             
             // Draw items if visible or revealed
             if ((isVisible || itemsRevealed) && item) {
-                // Draw yellow diamond for items
-                sf::RectangleShape marker(sf::Vector2f(12, 12));
-                marker.setFillColor(sf::Color(255, 215, 0, isVisible ? 200 : 100)); // More transparent if revealed
-                marker.setPosition(offsetX + x * cellSize + cellSize/2 - 6, 
-                                offsetY + y * cellSize + cellSize/2 - 6);
-                marker.setRotation(45); // Rotate to make it diamond-shaped
-                window.draw(marker);
+                itemSprite.setPosition(offsetX + x * cellSize + cellSize/2 - itemSprite.getGlobalBounds().width/2,
+                                     offsetY + y * cellSize + cellSize/2 - itemSprite.getGlobalBounds().height/2);
+                itemSprite.setColor(sf::Color(255, 255, 255, isVisible ? 200 : 100));
+                window.draw(itemSprite);
             }
 
             // Draw enemies if visible or revealed
@@ -1190,31 +1256,98 @@ void GamePlayState::drawGrid(sf::RenderWindow& window) {
                                      (!enemy->GetBoss() && monstersRevealed);
                 
                 if (shouldDrawEnemy) {
+                    // Calculate available space for sprite (cell height minus health bar height)
+                    float availableHeight = cellSize - 4; // 4 pixels for health bar
+                    float spriteScale = availableHeight / std::max(monsterTexture.getSize().y, bossTexture.getSize().y);
+
+                    // Draw enemy sprite
                     if (enemy->GetBoss()) {
-                        // Draw larger red diamond for bosses
-                        sf::RectangleShape marker(sf::Vector2f(14, 14));
-                        marker.setFillColor(sf::Color(255, 0, 0, isVisible ? 200 : 100));
-                        marker.setPosition(offsetX + x * cellSize + cellSize/2 - 7,
-                                        offsetY + y * cellSize + cellSize/2 - 7);
-                        marker.setRotation(45);
-                        window.draw(marker);
+                        bossSprite.setScale(spriteScale, spriteScale);
+                        bossSprite.setPosition(offsetX + x * cellSize + cellSize/2 - bossSprite.getGlobalBounds().width/2,
+                                            offsetY + y * cellSize + cellSize/2 - bossSprite.getGlobalBounds().height/2 - 2); // Move up slightly
+                        bossSprite.setColor(sf::Color(255, 255, 255, isVisible ? 200 : 100));
+                        window.draw(bossSprite);
                     } else {
-                        // Draw red circle for regular enemies
-                        sf::CircleShape marker(6);
-                        marker.setFillColor(sf::Color(255, 0, 0, isVisible ? 200 : 100));
-                        marker.setPosition(offsetX + x * cellSize + cellSize/2 - 6,
-                                        offsetY + y * cellSize + cellSize/2 - 6);
-                        window.draw(marker);
+                        monsterSprite.setScale(spriteScale, spriteScale);
+                        monsterSprite.setPosition(offsetX + x * cellSize + cellSize/2 - monsterSprite.getGlobalBounds().width/2,
+                                                offsetY + y * cellSize + cellSize/2 - monsterSprite.getGlobalBounds().height/2 - 2); // Move up slightly
+                        monsterSprite.setColor(sf::Color(255, 255, 255, isVisible ? 200 : 100));
+                        window.draw(monsterSprite);
                     }
+
+                    // Draw health bar at the bottom of the cell
+                    float infoY = offsetY + y * cellSize + cellSize - 4; // Position at bottom of cell
+                    float infoX = offsetX + x * cellSize;
+
+                    // Draw health bar background
+                    sf::RectangleShape healthBarBg(sf::Vector2f(cellSize, 4));
+                    healthBarBg.setFillColor(sf::Color(100, 100, 100));
+                    healthBarBg.setPosition(infoX, infoY);
+                    window.draw(healthBarBg);
+
+                    // Draw health bar
+                    float healthPercent = static_cast<float>(enemy->GetHealth()) / enemy->GetMaxHealth();
+                    sf::RectangleShape healthBar(sf::Vector2f(cellSize * healthPercent, 4));
+                    healthBar.setFillColor(sf::Color::Red);
+                    healthBar.setPosition(infoX, infoY);
+                    window.draw(healthBar);
+
+                    // Draw enemy name within the health bar
+                    sf::Text enemyName;
+                    enemyName.setFont(font);
+                    enemyName.setString(enemy->GetName());
+                    enemyName.setCharacterSize(10);
+                    enemyName.setFillColor(sf::Color::Black);
+                    enemyName.setPosition(infoX + 2, infoY + 1); // Slightly offset from edges
+                    window.draw(enemyName);
                 }
             }
         }
     }
 
-    // Draw player position
-    sf::CircleShape playerMarker(6);
-    playerMarker.setFillColor(sf::Color::Blue);
-    playerMarker.setPosition(offsetX + player->GetX() * cellSize + cellSize/2 - 6,
-                           offsetY + player->GetY() * cellSize + cellSize/2 - 6);
-    window.draw(playerMarker);
+    // Draw player position with character image
+    playerSprite.setPosition(offsetX + player->GetX() * cellSize + cellSize/2 - playerSprite.getGlobalBounds().width/2,
+                             offsetY + player->GetY() * cellSize + cellSize/2 - playerSprite.getGlobalBounds().height/2);
+    window.draw(playerSprite);
+}
+
+void GamePlayState::drawBackground(sf::RenderWindow& window) {
+    const float leftColumnWidth = 400.0f;
+    const int gridSize = 15;
+    const int cellSize = 40;
+    const float offsetX = leftColumnWidth + ((window.getSize().x - leftColumnWidth) - gridSize * cellSize) / 2;
+    const float offsetY = (window.getSize().y - gridSize * cellSize) / 2 - 50;
+
+    // Scale and position background to fit grid
+    float scaleX = (gridSize * cellSize) / static_cast<float>(backgroundTexture.getSize().x);
+    float scaleY = (gridSize * cellSize) / static_cast<float>(backgroundTexture.getSize().y);
+    backgroundSprite.setScale(scaleX, scaleY);
+    backgroundSprite.setPosition(offsetX, offsetY);
+    window.draw(backgroundSprite);
+}
+
+void GamePlayState::drawWalls(sf::RenderWindow& window) {
+    const float leftColumnWidth = 400.0f;
+    const int gridSize = 15;
+    const int cellSize = 40;
+    const float offsetX = leftColumnWidth + ((window.getSize().x - leftColumnWidth) - gridSize * cellSize) / 2;
+    const float offsetY = (window.getSize().y - gridSize * cellSize) / 2 - 50;
+
+    // Scale wall sprite to fit cell size
+    float scaleX = cellSize / static_cast<float>(wallTexture.getSize().x);
+    float scaleY = cellSize / static_cast<float>(wallTexture.getSize().y);
+    wallSprite.setScale(scaleX, scaleY);
+
+    // Draw visible walls
+    for (int y = 0; y < gridSize; ++y) {
+        for (int x = 0; x < gridSize; ++x) {
+            // Check if wall is within visibility range (3 cells from player)
+            int dx = abs(x - player->GetX());
+            int dy = abs(y - player->GetY());
+            if (dx <= 3 && dy <= 3 && gameMap->HasWall(x, y)) {
+                wallSprite.setPosition(offsetX + x * cellSize, offsetY + y * cellSize);
+                window.draw(wallSprite);
+            }
+        }
+    }
 } 

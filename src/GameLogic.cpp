@@ -3,6 +3,7 @@
 #include <iostream>
 #include <sstream>
 #include <random>
+#include <queue>
 
 int Character::TakeDamage(int damage) {
     // If this is healing (negative damage)
@@ -122,10 +123,12 @@ Map::Map(int width, int height)
     : width(width), height(height), 
       grid(width, std::vector<Character*>(height)),
       item_grid(width, std::vector<std::shared_ptr<Item>>(height)),
+      walls(width, std::vector<bool>(height, false)),
       rng(std::random_device()()) {
+    PopulateWalls(30); // Add 30 wall segments
     PopulateMonsters(5);
     PopulateBoss();
-    PopulateItems(8); // Add some items to the map
+    PopulateItems(8);
 }
 
 void Map::PlaceCharacter(Character& character) {
@@ -134,7 +137,7 @@ void Map::PlaceCharacter(Character& character) {
     int x = distX(rng);
     int y = distY(rng);
 
-    while (grid[x][y] != nullptr) {
+    while (grid[x][y] != nullptr || walls[x][y]) {
         x = distX(rng);
         y = distY(rng);
     }
@@ -163,8 +166,8 @@ void Map::MoveCharacter(Character& character, int dx, int dy) {
         return;
     }
 
-    if (grid[newX][newY] != nullptr) {
-        Logger::info("Position occupied!");
+    if (grid[newX][newY] != nullptr || walls[newX][newY]) {
+        Logger::info("Position occupied or blocked by wall!");
         return;
     }
 
@@ -272,7 +275,7 @@ void Map::PlaceItem(std::shared_ptr<Item> item) {
     int x = distX(rng);
     int y = distY(rng);
 
-    while (grid[x][y] != nullptr || item_grid[x][y] != nullptr) {
+    while (grid[x][y] != nullptr || item_grid[x][y] != nullptr || walls[x][y]) {
         x = distX(rng);
         y = distY(rng);
     }
@@ -316,5 +319,123 @@ void Map::PopulateItems(int n) {
     auto items = CreateRandomItems(n);
     for (auto& item : items) {
         PlaceItem(item);
+    }
+}
+
+void Map::PopulateWalls(int wallCount) {
+    // Create random wall segments ensuring connectivity
+    for (int i = 0; i < wallCount * 2; i++) {  // Double the initial wall count
+        std::uniform_int_distribution<int> distX(1, width - 2);
+        std::uniform_int_distribution<int> distY(1, height - 2);
+        std::uniform_int_distribution<int> distLen(2, 5);  // Increased max length
+        std::uniform_int_distribution<int> distDir(0, 1);
+
+        int startX = distX(rng);
+        int startY = distY(rng);
+        int length = distLen(rng);
+        bool horizontal = distDir(rng) == 0;
+
+        // Place wall segment
+        for (int j = 0; j < length; j++) {
+            int x = horizontal ? startX + j : startX;
+            int y = horizontal ? startY : startY + j;
+            
+            // Check bounds and don't place walls at edges
+            if (x >= 1 && x < width - 1 && y >= 1 && y < height - 1) {
+                // Add some randomness to wall placement
+                if (rand() % 100 < 80) {  // 80% chance to place each wall segment
+                    walls[x][y] = true;
+                }
+            }
+        }
+    }
+
+    // Ensure connectivity using a refined flood fill algorithm
+    std::vector<std::vector<bool>> visited(width, std::vector<bool>(height, false));
+    std::queue<std::pair<int, int>> q;
+    q.push({0, 0}); // Start from the top-left corner
+    visited[0][0] = true;
+
+    while (!q.empty()) {
+        auto [x, y] = q.front();
+        q.pop();
+
+        // Check all 4 directions
+        for (const auto& [dx, dy] : std::vector<std::pair<int, int>>{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+            int newX = x + dx;
+            int newY = y + dy;
+
+            if (newX >= 0 && newX < width && newY >= 0 && newY < height && !visited[newX][newY] && !walls[newX][newY]) {
+                visited[newX][newY] = true;
+                q.push({newX, newY});
+            }
+        }
+    }
+
+    // Remove walls that create isolated sections
+    for (int x = 0; x < width; ++x) {
+        for (int y = 0; y < height; ++y) {
+            if (!visited[x][y] && walls[x][y]) {
+                walls[x][y] = false;
+            }
+        }
+    }
+
+    // Re-add more walls to ensure the map isn't too open
+    for (int i = 0; i < wallCount; ++i) {  // Re-add more walls
+        std::uniform_int_distribution<int> distX(1, width - 2);
+        std::uniform_int_distribution<int> distY(1, height - 2);
+        int x = distX(rng);
+        int y = distY(rng);
+
+        if (!visited[x][y]) {
+            // Add small wall clusters
+            for (int dx = -1; dx <= 1; ++dx) {
+                for (int dy = -1; dy <= 1; ++dy) {
+                    int newX = x + dx;
+                    int newY = y + dy;
+                    if (newX >= 1 && newX < width - 1 && newY >= 1 && newY < height - 1) {
+                        if (rand() % 100 < 60) {  // 60% chance for each adjacent wall
+                            walls[newX][newY] = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void Map::MoveMonsters(Character& player) {
+    // Move each monster one step in a random direction if not blocked
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            Character* monster = grid[x][y];
+            if (monster && monster != &player && !monster->GetBoss()) {
+                // Generate random direction (0: up, 1: right, 2: down, 3: left)
+                std::uniform_int_distribution<int> distDir(0, 3);
+                int direction = distDir(rng);
+                
+                int dx = 0, dy = 0;
+                switch (direction) {
+                    case 0: dy = -1; break; // up
+                    case 1: dx = 1; break;  // right
+                    case 2: dy = 1; break;  // down
+                    case 3: dx = -1; break; // left
+                }
+
+                // Try to move in the random direction
+                int newX = x + dx;
+                int newY = y + dy;
+
+                // Check if move is valid and not blocked
+                if (newX >= 0 && newX < width && newY >= 0 && newY < height &&
+                    grid[newX][newY] == nullptr && !walls[newX][newY]) {
+                    grid[newX][newY] = monster;
+                    grid[x][y] = nullptr;
+                    monster->SetX(newX);
+                    monster->SetY(newY);
+                }
+            }
+        }
     }
 } 

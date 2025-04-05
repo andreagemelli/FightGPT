@@ -63,6 +63,18 @@ private:
     sf::Texture classIcon;
     sf::Sprite iconSprite;
     
+    // New declarations
+    sf::Texture playerTexture; // Texture for the player character
+    sf::Sprite playerSprite;   // Sprite for the player character
+    
+    // Add new texture and sprite members for monsters, boss, and items
+    sf::Texture monsterTexture;
+    sf::Texture bossTexture;
+    sf::Texture itemTexture;
+    sf::Sprite monsterSprite;
+    sf::Sprite bossSprite;
+    sf::Sprite itemSprite;
+    
     // Dice-related members
     sf::Texture diceTexture;
     sf::Sprite diceSprite;
@@ -80,11 +92,19 @@ private:
     std::vector<sf::RectangleShape> combatLogBackgrounds;
     static const size_t MAX_LOG_LINES = 25;
 
+    // Map-related textures
+    sf::Texture backgroundTexture;
+    sf::Sprite backgroundSprite;
+    sf::Texture wallTexture;
+    sf::Sprite wallSprite;
+
     // Methods
     void initializeStats();
     void updateStatsText();
     void updateEnemyDisplays();
     void drawGrid(sf::RenderWindow& window);
+    void drawBackground(sf::RenderWindow& window);
+    void drawWalls(sf::RenderWindow& window);
     void handleCombat(Character* enemy);
     void handleEnemyTurn(Character* enemy);
     void handleVictory(Character& enemy);
